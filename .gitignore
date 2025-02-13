@@ -1,0 +1,25 @@
+# Ignorer les fichiers binaires compilés
+matled/target/
+
+# Ignorer les fichiers de configuration Cargo
+matled/Cargo.lock
+
+# Ignorer les fichiers de configuration de l'environnement
+matled/.cargo/config
+
+# Ignorer les fichiers de cache Cargo
+matled/.cargo/registry/cache/
+matled/.cargo/registry/index/
+matled/.cargo/registry/src/
+
+# Ignorer les fichiers de cache de Cargo
+matled/.cargo/git/db/
+
+# Ignorer les fichiers de documentation générés
+matled/docs/
+
+# Ignorer les fichiers de test
+matled/tests/
+
+# Ignorer les fichiers de configuration IDE
+matled/.vscode/
