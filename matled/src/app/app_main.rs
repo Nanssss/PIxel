@@ -1,9 +1,17 @@
-use crate::app::states;
-use crate::app::data;
+use std::{thread, time};
 
-pub fn hello_from_appmain() {
+use crate::app::states::app_state::App;
+
+pub fn app_main() {
     println!("Hello from app_main!");
 
-    data::fetch_data::hello_from_fetch_data();
-    states::clock::hello_from_clock();
+    let mut app = App::new();
+
+    loop {
+        app.draw();
+        app.fetch_data();
+        thread::sleep(time::Duration::from_millis(1000));
+    }
+
+
 }
