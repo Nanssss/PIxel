@@ -12,6 +12,4 @@ pub fn app_main() {
         app.fetch_data();
         thread::sleep(time::Duration::from_millis(1000));
     }
-
-
 }
