@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use serde::Deserialize;
 use serde_json::json;
 
 const WEATHER_API_BASE_URL = "https://api.open-meteo.com/v1/forecast";
@@ -32,6 +33,7 @@ impl WeatherData {
 */
 /* 
 Notes:
+    cargo add serde --features derive
     cargo add serde_json
 */
 fn get_weather() -> (String) {
