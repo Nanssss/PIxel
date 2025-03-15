@@ -1,4 +1,5 @@
 use serde_json::json;
+use serde::{Deserialize, Deserializer};
 use reqwest::blocking::Client;
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
@@ -71,12 +72,13 @@ fn get_weather() -> String {
         .get(full_url)
         .header("User-Agent", "reqwest")
         .send();
-    
-    println!("{response:?}");
+    // println!("{response:?}");
 
-    let body = response.unwrap().text();
+    // let body = response.unwrap().text().unwrap();
+    let parsed: WeatherResponse = response.unwrap().json::<WeatherResponse>().unwrap();
 
-    println!("{body:?}");
+
+    println!("{parsed:?}");
 
     let temp = "25".to_string();
     temp
@@ -97,4 +99,52 @@ fn json_to_query_string(params_json: &serde_json::Value) -> String {
         })
         .collect::<Vec<String>>()
         .join("&")
+}
+
+#[allow(dead_code)] // necessary to avoid warning because fields only used for deserialization
+#[derive(Debug, Deserialize)]
+struct WeatherResponse {
+    latitude: f64,
+    longitude: f64,
+    generationtime_ms: f64,
+    utc_offset_seconds: i32,
+    timezone: String,
+    timezone_abbreviation: String,
+    elevation: f64,
+    daily_units: DailyUnits,
+    daily: DailyData,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct DailyUnits {
+    time: String,
+    weather_code: String,
+    apparent_temperature_max: String,
+    apparent_temperature_min: String,
+    precipitation_sum: String,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct DailyData {
+    #[serde(deserialize_with = "first_element_or_default")] // function used when deserializing, to take 1rst element of Vec<.>
+    time: String,
+    #[serde(deserialize_with = "first_element_or_default")]
+    weather_code: i32,
+    #[serde(deserialize_with = "first_element_or_default")]
+    apparent_temperature_max: f64,
+    #[serde(deserialize_with = "first_element_or_default")]
+    apparent_temperature_min: f64,
+    #[serde(deserialize_with = "first_element_or_default")]
+    precipitation_sum: f64,
+}
+
+fn first_element_or_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Default + Clone + Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    let vec: Vec<T> = Vec::deserialize(deserializer)?; // Désérialisation en Vec<T>
+    Ok(vec.into_iter().next().unwrap_or_default()) // Prend le premier élément ou renvoie le défaut
 }
