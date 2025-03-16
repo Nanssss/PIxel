@@ -7,7 +7,7 @@
             "request": "launch",
             "program": "${workspaceRootFolderName}/target/debug/${workspaceRootFolderName}",
             "args": [],
-            "cwd": "${workspaceRootFolderName}/target/debug",
+            "cwd": "${workspaceRootFolderName}",
             "stopOnEntry": false,
             "console": "integratedTerminal"
         }
