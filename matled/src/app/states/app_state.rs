@@ -1,5 +1,6 @@
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
+use reqwest::blocking::Client;
 use std::sync::Arc;
 
 enum AppState {
@@ -7,14 +8,14 @@ enum AppState {
     Weather(WeatherData),
 }
 
-enum AppContext {
-    client: Arc<Client>,
+pub struct AppContext {
+    pub client: Arc<Client>,
 }
 
 impl AppContext {
     pub fn new() -> Self {
         AppContext {
-            client: Arc<Client::new()>,
+            client: Arc::new(Client::new()),
         }
     }
 }
@@ -26,10 +27,12 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
+        let context = AppContext::new();
+        let state = AppState::Weather(WeatherData::new(&context));
+        // state: AppState::Clock(ClockData::new()),
         App { 
-            context: AppContext::new(),
-            // state: AppState::Clock(ClockData::new()),
-            state: AppState::Weather(WeatherData::new(&context)),
+            context,
+            state,
         }
     }
 

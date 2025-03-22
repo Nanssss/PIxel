@@ -2,6 +2,7 @@ use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::blocking::Client;
 use std::fs;
+use crate::app::states::app_state::AppContext;
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
@@ -33,7 +34,15 @@ impl WeatherData {
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        println!("Drawing Weather");
+        println!("\
+        WEATHER:
+            ==========================================
+            | weather_code      | {}
+            | temp_max          | {}
+            | temp_min          | {}
+            | precipitation_sum | {}
+            ==========================================
+        ", self.weather_code, self.temp_max, self.temp_min, self.precipitation_sum);
     }
 
     /* Method for fetching data from public API */
@@ -82,7 +91,6 @@ fn get_weather(client: &Client) -> DailyData {
 /* ______________________REQUEST_PART______________________ */
 
     /* Create Reqwest Client */
-    let client = Client::new();
     let response = client
         .get(full_url)
         .header("User-Agent", "reqwest")
