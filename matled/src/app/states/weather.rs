@@ -21,8 +21,8 @@ pub struct WeatherData {
 impl WeatherData {
 
     /* WeatherData constructor */
-    pub fn new() -> Self {
-        let data= get_weather();
+    pub fn new(context: &AppContext) -> Self {
+        let data= get_weather(&context.client);
         WeatherData {
             weather_code:       code_to_weather(data.weather_code),
             temp_max:           data.apparent_temperature_max.to_string(),
@@ -37,8 +37,8 @@ impl WeatherData {
     }
 
     /* Method for fetching data from public API */
-    pub fn fetch_data(&mut self) {
-        let data= get_weather();
+    pub fn fetch_data(&mut self, context: &AppContext) {
+        let data= get_weather(&context.client);
         self.weather_code =         code_to_weather(data.weather_code);
         self.temp_max =             data.apparent_temperature_max.to_string();
         self.temp_min =             data.apparent_temperature_min.to_string();
@@ -52,7 +52,7 @@ impl WeatherData {
 // ================================================================= 
 
 /* Function to get data from public weather API */
-fn get_weather() -> DailyData {
+fn get_weather(client: &Client) -> DailyData {
 
 /* ______________________URL_PART______________________ */
 
