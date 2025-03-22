@@ -29,7 +29,7 @@ impl App {
     pub fn new() -> Self {
         let context = AppContext::new();
         let state = AppState::Weather(WeatherData::new(&context));
-        // state: AppState::Clock(ClockData::new()),
+        // let state = AppState::Clock(ClockData::new());
         App { 
             context,
             state,
