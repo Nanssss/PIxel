@@ -169,7 +169,7 @@ fn code_to_weather(code: i32) -> String {
 
 
 // ================================================================= 
-//    Static types
+//    Private types
 // ================================================================= 
 
 /* The following types are used for deserialization */

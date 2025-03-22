@@ -1,11 +1,19 @@
 use chrono::Local;
 
+/* Public struct containing clock data */
 pub struct ClockData {
     date: String,
     time: String,
 }
 
+
+// ================================================================= 
+//    Methods implementation
+// ================================================================= 
+
 impl ClockData {
+
+    /* ClockData constructor */
     pub fn new() -> Self {
         let (date, time) = get_date_time();
         ClockData {
@@ -14,11 +22,13 @@ impl ClockData {
         }
     }
 
+    /* Method fro drawing data to the screen */
     pub fn draw(&self) {
         println!("Drawing Clock");
         println!("Date: {} | Time: {}", self.date, self.time);
     }
 
+    /* Method for fetching data */
     pub fn fetch_data(&mut self) {
         let (date, time) = get_date_time();
         self.date = date;
@@ -26,9 +36,11 @@ impl ClockData {
     }
 }
 
-/* 
-    Static functions
-*/
+
+// ================================================================= 
+//    Static functions
+// ================================================================= 
+
 fn get_date_time() -> (String, String) {
     let now = Local::now();
     
