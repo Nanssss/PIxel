@@ -8,7 +8,7 @@ pub struct ClockData {
 
 
 // ================================================================= 
-//    Methods implementation
+//    Methods implementation                                       |
 // ================================================================= 
 
 impl ClockData {
@@ -43,7 +43,7 @@ impl ClockData {
 
 
 // ================================================================= 
-//    Static functions
+//    Static functions                                             |
 // ================================================================= 
 
 fn get_date_time() -> (String, String) {

@@ -7,28 +7,37 @@ use crate::app::states::app_state::AppContext;
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
 /* Public struct containing weather data */
+#[derive(Default)] // used to be able to fill with default values
 pub struct WeatherData {
     weather_code:       String,     // weather wmo codes: https://gist.github.com/stellasphere/9490c195ed2b53c707087c8c2db4ec0c
     temp_max:           String,     // maximum daily temperature
     temp_min:           String,     // minimum daily temperature
     precipitation_sum:  String,     // sum of daily precipitations (including rain, snow, hail)
+    request_url:        String,     // full request URL to send to weather API
 }
 
 
 // ================================================================= 
-//    Methods implementation
+//    Methods implementation                                       |
 // ================================================================= 
 
 impl WeatherData {
 
     /* WeatherData constructor */
     pub fn new(context: &AppContext) -> Self {
-        let data= get_weather(&context.client);
+        /* Initialize some data in the struct */
+        let weather_init = init();
+
+        /* Get data from the weather API */
+        let data= get_weather(&context.client, &weather_init.request_url);
+
+        /* Return WeatherData struct */
         WeatherData {
-            weather_code:       code_to_weather(data.weather_code),
+            weather_code:       code_to_weather(data.weather_code),         // translate weather_code into HR String
             temp_max:           data.apparent_temperature_max.to_string(),
             temp_min:           data.apparent_temperature_min.to_string(),
             precipitation_sum:  data.precipitation_sum.to_string(),
+            ..weather_init // completes other fields from init data
         }
     }
 
@@ -47,8 +56,11 @@ impl WeatherData {
 
     /* Method for fetching data from public API */
     pub fn fetch_data(&mut self, context: &AppContext) {
-        let data= get_weather(&context.client);
-        self.weather_code =         code_to_weather(data.weather_code);
+        /* Get data from the weather API */
+        let data= get_weather(&context.client, &self.request_url);
+
+        /* Update self fields */
+        self.weather_code =         code_to_weather(data.weather_code);         // translate weather_code into HR String
         self.temp_max =             data.apparent_temperature_max.to_string();
         self.temp_min =             data.apparent_temperature_min.to_string();
         self.precipitation_sum =    data.precipitation_sum.to_string();
@@ -57,14 +69,11 @@ impl WeatherData {
 
 
 // ================================================================= 
-//    Static functions
+//    Static functions                                             |
 // ================================================================= 
 
-/* Function to get data from public weather API */
-fn get_weather(client: &Client) -> DailyData {
-
-/* ______________________URL_PART______________________ */
-
+/* Function that initializes the WeatherData struct */
+fn init() -> WeatherData {
     /* create a JSON with the request parameters */
     let params = json!({
         "latitude": "43.57",
@@ -86,16 +95,21 @@ fn get_weather(client: &Client) -> DailyData {
     /* Concatenate base URL and query params */
     let full_url = format!("{}?{}", WEATHER_API_BASE_URL, params_url);
 
-    // println!("full_url: {full_url}");
+    /* Return initialized WeatherData struct */
+    WeatherData {
+        request_url: full_url,
+        ..Default::default()            // use default values for other fields
+    }
+}
 
-/* ______________________REQUEST_PART______________________ */
+/* Function to get data from public weather API */
+fn get_weather(client: &Client, url: &String) -> DailyData {
 
     /* Create Reqwest Client */
     let response = client
-        .get(full_url)
+        .get(url)
         .header("User-Agent", "reqwest")
         .send();
-
     // println!("{response:?}");
 
     /* Deserialize response */
@@ -169,7 +183,7 @@ fn code_to_weather(code: i32) -> String {
 
 
 // ================================================================= 
-//    Private types
+//    Private types                                                |
 // ================================================================= 
 
 /* The following types are used for deserialization */

@@ -8,7 +8,7 @@ const START_STATE:AppStatesEnum = AppStatesEnum::Weather;
 
 
 // ================================================================= 
-//   AppContext part 
+//   AppContext part                                               |
 // ================================================================= 
 
 /* Struct used to store context used by different states */
@@ -29,7 +29,7 @@ impl AppContext {
 
 
 // ================================================================= 
-//    App part 
+//    App part                                                     |
 // ================================================================= 
 
 /* Enum declaring state variants */
