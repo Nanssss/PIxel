@@ -9,7 +9,7 @@ const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 /* Public struct containing weather data */
 #[derive(Default)] // used to be able to fill with default values
 pub struct WeatherData {
-    weather_code:       String,     // weather wmo codes: https://gist.github.com/stellasphere/9490c195ed2b53c707087c8c2db4ec0c
+    weather_summary:    String,     // concise weather summary
     temp_max:           String,     // maximum daily temperature
     temp_min:           String,     // minimum daily temperature
     precipitation_sum:  String,     // sum of daily precipitations (including rain, snow, hail)
@@ -33,7 +33,7 @@ impl WeatherData {
 
         /* Return WeatherData struct */
         WeatherData {
-            weather_code:       code_to_weather(data.weather_code),         // translate weather_code into HR String
+            weather_summary:    code_to_weather(data.weather_code),         // translate weather_code into HR String
             temp_max:           data.apparent_temperature_max.to_string(),
             temp_min:           data.apparent_temperature_min.to_string(),
             precipitation_sum:  data.precipitation_sum.to_string(),
@@ -46,12 +46,12 @@ impl WeatherData {
         println!("\
         WEATHER:
             ==========================================
-            | weather_code      | {}
+            | weather_summary   | {}
             | temp_max          | {}
             | temp_min          | {}
             | precipitation_sum | {}
-            ==========================================
-        ", self.weather_code, self.temp_max, self.temp_min, self.precipitation_sum);
+            ==========================================\
+        ", self.weather_summary, self.temp_max, self.temp_min, self.precipitation_sum);
     }
 
     /* Method for fetching data from public API */
@@ -60,7 +60,7 @@ impl WeatherData {
         let data= get_weather(&context.client, &self.request_url);
 
         /* Update self fields */
-        self.weather_code =         code_to_weather(data.weather_code);         // translate weather_code into HR String
+        self.weather_summary =      code_to_weather(data.weather_code);         // translate weather_code into HR String
         self.temp_max =             data.apparent_temperature_max.to_string();
         self.temp_min =             data.apparent_temperature_min.to_string();
         self.precipitation_sum =    data.precipitation_sum.to_string();
@@ -74,7 +74,7 @@ impl WeatherData {
 
 /* Function that initializes the WeatherData struct */
 fn init() -> WeatherData {
-    /* create a JSON with the request parameters */
+    /* Create a JSON with the request parameters */
     let params = json!({
         "latitude": "43.57",
         "longitude": "1.46",
@@ -150,8 +150,8 @@ where
     T: Default + Clone + Deserialize<'de>,
     D: Deserializer<'de>,
 {
-    let vec: Vec<T> = Vec::deserialize(deserializer)?; // Deserialization as a Vec<T>
-    Ok(vec.into_iter().next().unwrap_or_default()) // Take out first element or send back Default
+    let vec: Vec<T> = Vec::deserialize(deserializer)?; // deserialization as a Vec<T>
+    Ok(vec.into_iter().next().unwrap_or_default()) // take out first element or send back Default
 }
 
 
@@ -188,7 +188,7 @@ fn code_to_weather(code: i32) -> String {
 
 /* The following types are used for deserialization */
 
-#[allow(dead_code)] // Necessary to avoid warning because fields only used for deserialization
+#[allow(dead_code)] // necessary to avoid warning because fields only used for deserialization
 #[derive(Debug, Deserialize)]
 struct WeatherResponse {
     latitude:               f64,
@@ -202,7 +202,7 @@ struct WeatherResponse {
     daily:                  DailyData,
 }
 
-#[allow(dead_code)] // Necessary to avoid warning because fields only used for deserialization
+#[allow(dead_code)] // necessary to avoid warning because fields only used for deserialization
 #[derive(Debug, Deserialize)]
 struct DailyUnits {
     time:                       String,
@@ -212,13 +212,13 @@ struct DailyUnits {
     precipitation_sum:          String,
 }
 
-#[allow(dead_code)] // Necessary to avoid warning because fields only used for deserialization
+#[allow(dead_code)] // necessary to avoid warning because fields only used for deserialization
 #[derive(Debug, Deserialize)]
 struct DailyData {
-    #[serde(deserialize_with = "first_element_or_default")] // Function used to deserialize, to take out first element of Vec<.>
+    #[serde(deserialize_with = "first_element_or_default")] // function used to deserialize, to take out first element of Vec<.>
     time:                       String,
     #[serde(deserialize_with = "first_element_or_default")]
-    weather_code:               i32,
+    weather_code:               i32,                        // weather wmo codes: https://gist.github.com/stellasphere/9490c195ed2b53c707087c8c2db4ec0c
     #[serde(deserialize_with = "first_element_or_default")]
     apparent_temperature_max:   f64,
     #[serde(deserialize_with = "first_element_or_default")]

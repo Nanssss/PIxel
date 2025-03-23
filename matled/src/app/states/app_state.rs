@@ -73,24 +73,24 @@ impl App {
     /* Call draw() method of corresponding state */
     pub fn draw(&self) {
         match &self.current_state {
-            AppStatesEnum::Clock => self.states.clock.draw(),
-            AppStatesEnum::Weather => self.states.weather.draw(),
+            AppStatesEnum::Clock    => self.states.clock.draw(),
+            AppStatesEnum::Weather  => self.states.weather.draw(),
         }
     }
 
     /* Call fetch_data() method of corresponding state */
     pub fn fetch_data(&mut self) {
         match &mut self.current_state{
-            AppStatesEnum::Clock => self.states.clock.fetch_data(),
-            AppStatesEnum::Weather => self.states.weather.fetch_data(&self.context),
+            AppStatesEnum::Clock    => self.states.clock.fetch_data(),
+            AppStatesEnum::Weather  => self.states.weather.fetch_data(&self.context),
         }
     }
 
     /* Switch to next state */
     pub fn next_state(&mut self) {
         match &self.current_state {
-            AppStatesEnum::Clock => self.current_state = AppStatesEnum::Weather,
-            AppStatesEnum::Weather => self.current_state = AppStatesEnum::Clock,
+            AppStatesEnum::Clock    => self.current_state = AppStatesEnum::Weather,
+            AppStatesEnum::Weather  => self.current_state = AppStatesEnum::Clock,
         }
     }
 }
