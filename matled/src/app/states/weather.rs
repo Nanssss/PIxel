@@ -29,7 +29,7 @@ impl WeatherData {
         let weather_init = init();
 
         /* Get data from the weather API */
-        let data= get_weather(&context.client, &weather_init.request_url);
+        let data = get_weather(&context.client, &weather_init.request_url);
 
         /* Return WeatherData struct */
         WeatherData {
