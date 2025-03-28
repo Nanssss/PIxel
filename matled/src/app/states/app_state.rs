@@ -1,5 +1,6 @@
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
+use crate::app::states::gtasks::*;
 use reqwest::blocking::Client;
 use std::sync::Arc;
 
@@ -36,19 +37,21 @@ impl AppContext {
 enum AppStatesEnum {
     Clock,
     Weather,
+    GTasks,
 }
 
 /* Struct storing all states */
 struct AppStates {
-    clock: ClockData,
-    weather: WeatherData,
+    clock:      ClockData,
+    weather:    WeatherData,
+    gtasks:     GTasksData,
 }
 
 /* App struct */
 pub struct App {
-    context: AppContext,
-    states: AppStates,
-    current_state: AppStatesEnum,
+    context:        AppContext,
+    states:         AppStates,
+    current_state:  AppStatesEnum,
 }
 
 /* App methods implementation */
@@ -56,15 +59,17 @@ impl App {
 
     /* App constructor */
     pub fn new() -> Self {
-        let context = AppContext::new();
-        let weather = WeatherData::new(&context);
-        let clock = ClockData::new();
+        let context =   AppContext::new();
+        let weather =   WeatherData::new(&context);
+        let clock =     ClockData::new();
+        let gtasks =    GTasksData::new(&context);
 
         App { 
             context,
             states: AppStates {
                 clock,
                 weather,
+                gtasks,
             },
             current_state: START_STATE,
         }
@@ -75,6 +80,7 @@ impl App {
         match &self.current_state {
             AppStatesEnum::Clock    => self.states.clock.draw(),
             AppStatesEnum::Weather  => self.states.weather.draw(),
+            AppStatesEnum::GTasks   => self.states.gtasks.draw(),
         }
     }
 
@@ -83,6 +89,7 @@ impl App {
         match &mut self.current_state{
             AppStatesEnum::Clock    => self.states.clock.fetch_data(),
             AppStatesEnum::Weather  => self.states.weather.fetch_data(&self.context),
+            AppStatesEnum::GTasks   => self.states.gtasks.fetch_data(&self.context),
         }
     }
 
@@ -90,7 +97,8 @@ impl App {
     pub fn next_state(&mut self) {
         match &self.current_state {
             AppStatesEnum::Clock    => self.current_state = AppStatesEnum::Weather,
-            AppStatesEnum::Weather  => self.current_state = AppStatesEnum::Clock,
+            AppStatesEnum::Weather  => self.current_state = AppStatesEnum::GTasks,
+            AppStatesEnum::GTasks   => self.current_state = AppStatesEnum::Clock,
         }
     }
 }
