@@ -2,7 +2,7 @@ use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 const RES_FOLDER_PATH: &str = "src/app/res/";
 
-pub async fn oauth2_login_google() {
+pub async fn oauth2_login_google(scopes: &[&str]) {
     /* Read application secret from a file, you can generate this file from the Google Cloud console: https://console.cloud.google.com/ */
     let secret_path = format!("{}credentials.json", RES_FOLDER_PATH);
     let secret = yup_oauth2::read_application_secret(&secret_path)
@@ -19,9 +19,6 @@ pub async fn oauth2_login_google() {
     .build()
     .await
     .unwrap();
-
-    /* Add here the scopes you wan to use */
-    let scopes = &["https://www.googleapis.com/auth/calendar.readonly"];
 
     /* token(<scopes>) is the one important function of this crate; it does everything to
     obtain a token that can be sent e.g. as Bearer token. */

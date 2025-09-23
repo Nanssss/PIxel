@@ -3,6 +3,11 @@ use crate::app::states::app_state::AppContext;
 use crate::app::dep::oauth2::oauth2_login_google;
 
 const GCALENDAR_API_BASE_URL: &str = "...";
+/* 
+Add the GCALENDAR scopes you need here.
+(find them at https://developers.google.com/workspace/calendar/api/auth?hl=fr)
+*/
+const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
 /* Public struct containing gtasks data */
 #[derive(Default)] // to be able to fill with default values
@@ -72,7 +77,7 @@ impl GTasksData {
 /* Function that initializes the GTasksData struct */
 async fn init() -> GTasksData {
     // @todo: To correctly use this function, I'll have to use async functions and refactor the whole app
-    oauth2_login_google().await;
+    oauth2_login_google(GCALENDAR_SCOPES).await;
 
     GTasksData {
         request_url: GCALENDAR_API_BASE_URL.to_string(),
