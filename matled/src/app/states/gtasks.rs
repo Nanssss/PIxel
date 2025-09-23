@@ -3,6 +3,7 @@ use crate::app::dep::oauth2::get_oauth2_google_token;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
+use chrono::Utc;
 
 const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary";
 /* 
@@ -20,6 +21,7 @@ pub struct GTasksData {
 }
 
 /* Atomic task */
+#[derive(Debug)] // to be able to print with {:?}
 struct GTask {
     title:          String,         // title of the task
     date:           String,         // date of the task
@@ -100,7 +102,7 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
         ("maxResults", "5"),
         ("orderBy", "startTime"),
         ("singleEvents", "true"),
-        ("timeMin", "2023-01-01T00:00:00Z"), // Example: fetch events from 2023
+        ("timeMin", &chrono::Utc::now().to_rfc3339()), // Get current time in RFC3339 format
     ];
 
     /* Base url */
@@ -117,22 +119,22 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
         .expect("Failed to send GTASKS API request");
 
     let body = res.text().await.expect("Failed to read response body");
-    println!("GTASKS API Response Body: {}\n", body);
-    // let json: Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    // println!("GTASKS API Response Body: {}\n", body);
+    let json: Value = serde_json::from_str(&body).expect("Failed to parse JSON");
 
     // Parse events
-    // let mut tasks = Vec::new();
-    // if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
-    //     for item in items {
-    //         let title = item.get("summary").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    //         let date = item.get("start").and_then(|v| v.get("dateTime").or_else(|| v.get("date"))).and_then(|v| v.as_str()).unwrap_or("").to_string();
-    //         let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    //         tasks.push(GTask { title, date, description });
-    //     }
-    // }
-    // gtasks_object.nb = tasks.len();
-    // gtasks_object.tasks = tasks;
-    gtasks_object.nb = 5; // Example value
+    let mut tasks = Vec::new();
+    if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
+        for item in items {
+            let title = item.get("summary").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let date = item.get("start").and_then(|v| v.get("dateTime").or_else(|| v.get("date"))).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            tasks.push(GTask { title, date, description });
+        }
+    }
+    println!("Parsed Tasks: {:#?}", tasks);
+    gtasks_object.nb = tasks.len();
+    gtasks_object.tasks = tasks;
 }
 
 
