@@ -29,3 +29,4 @@ matled/.vscode/
 
 # Ignore credentials file
 credentials.json
+tokencache.json
