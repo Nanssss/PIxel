@@ -4,7 +4,7 @@ pub async fn oauth2_login_google() {
     /* Read application secret from a file, you can generate this file from the Google Cloud console: https://console.cloud.google.com/ */
     let secret = yup_oauth2::read_application_secret("src/app/res/credentials.json")
         .await
-        .expect("credentials.json");
+        .expect("Invalid credentials.json path, file misnamed, or file missing.");
 
     /* Create an authenticator that uses an InstalledFlow to authenticate. The
     authentication tokens are persisted to a file named tokencache.json. The

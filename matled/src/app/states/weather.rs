@@ -1,6 +1,6 @@
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
-use reqwest::blocking::Client;
+use reqwest::Client;
 use std::fs;
 use crate::app::states::app_state::AppContext;
 
@@ -24,12 +24,12 @@ pub struct WeatherData {
 impl WeatherData {
 
     /* WeatherData constructor */
-    pub fn new(context: &AppContext) -> Self {
+    pub async fn new(context: &AppContext) -> Self {
         /* Initialize some data in the struct */
         let weather_init = init();
 
         /* Get data from the weather API */
-        let data = get_weather(&context.client, &weather_init.request_url);
+        let data = get_weather(&context.client, &weather_init.request_url).await;
 
         /* Return WeatherData struct */
         WeatherData {
@@ -55,9 +55,9 @@ impl WeatherData {
     }
 
     /* Method for fetching data from public API */
-    pub fn fetch_data(&mut self, context: &AppContext) {
+    pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the weather API */
-        let data= get_weather(&context.client, &self.request_url);
+        let data= get_weather(&context.client, &self.request_url).await;
 
         /* Update self fields */
         self.weather_summary =      code_to_weather(data.weather_code);         // translate weather_code into HR String
@@ -103,19 +103,21 @@ fn init() -> WeatherData {
 }
 
 /* Function to get data from public weather API */
-fn get_weather(client: &Client, url: &String) -> DailyData {
+async fn get_weather(client: &Client, url: &String) -> DailyData {
 
     /* Create Reqwest Client */
     let response = client
         .get(url)
         .header("User-Agent", "reqwest")
-        .send();
+        .send()
+        .await
+        .unwrap();
     // println!("{response:?}");
 
     /* Deserialize response */
     let parsed: WeatherResponse = response
-    .unwrap()
     .json::<WeatherResponse>()
+    .await
     .unwrap();
 
     // let body = response.unwrap().text().unwrap();

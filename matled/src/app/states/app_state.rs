@@ -1,7 +1,7 @@
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
-use reqwest::blocking::Client;
+use reqwest::Client;
 use std::sync::Arc;
 
 /* First state on boot */
@@ -58,11 +58,11 @@ pub struct App {
 impl App {
 
     /* App constructor */
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let context =   AppContext::new();
-        let weather =   WeatherData::new(&context);
+        let weather =   WeatherData::new(&context).await;
         let clock =     ClockData::new();
-        let gtasks =    GTasksData::new(&context);
+        let gtasks =    GTasksData::new(&context).await;
 
         App { 
             context,
@@ -85,11 +85,11 @@ impl App {
     }
 
     /* Call fetch_data() method of corresponding state */
-    pub fn fetch_data(&mut self) {
+    pub async fn fetch_data(&mut self) {
         match &mut self.current_state{
             AppStatesEnum::Clock    => self.states.clock.fetch_data(),
-            AppStatesEnum::Weather  => self.states.weather.fetch_data(&self.context),
-            AppStatesEnum::GTasks   => self.states.gtasks.fetch_data(&self.context),
+            AppStatesEnum::Weather  => self.states.weather.fetch_data(&self.context).await,
+            AppStatesEnum::GTasks   => self.states.gtasks.fetch_data(&self.context).await,
         }
     }
 

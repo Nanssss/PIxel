@@ -1,4 +1,4 @@
-use reqwest::blocking::Client;
+use reqwest::Client;
 use crate::app::states::app_state::AppContext;
 use crate::app::dep::oauth2::oauth2_login_google;
 
@@ -27,12 +27,12 @@ struct GTask {
 impl GTasksData {
 
     /* GTasksData constructor */
-    pub fn new(context: &AppContext) -> Self {
+    pub async fn new(context: &AppContext) -> Self {
         /* Initialize some data in the struct */
-        let gtasks_init = init();
+        let gtasks_init = init().await;
 
         /* Get data from the GCalendar API */
-        // let data = get_gtasks(&context.client, &gtasks_init.request_url);
+        // let data = get_gtasks(&context.client, &gtasks_init.request_url).await;
 
         /* Return GTasksData struct */
         GTasksData {
@@ -54,9 +54,9 @@ impl GTasksData {
     }
 
     /* Method for fetching data from public API */
-    pub fn fetch_data(&mut self, context: &AppContext) {
+    pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the GCalendar API */
-        // let data = get_gtasks(&context.client, &gtasks_init.request_url);
+        // let data = get_gtasks(&context.client, &self.request_url).await;
 
         /* Update self fields */
         // self.tasks = ..;
@@ -70,9 +70,9 @@ impl GTasksData {
 // ================================================================= 
 
 /* Function that initializes the GTasksData struct */
-fn init() -> GTasksData {
+async fn init() -> GTasksData {
     // @todo: To correctly use this function, I'll have to use async functions and refactor the whole app
-    oauth2_login_google();
+    oauth2_login_google().await;
 
     GTasksData {
         request_url: GCALENDAR_API_BASE_URL.to_string(),

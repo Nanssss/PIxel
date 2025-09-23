@@ -10,7 +10,8 @@ use app::app_main;
     cargo add yup-oauth2
 */
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("Hello from main");
-    app_main::app_main();
+    app_main::app_main().await;
 }
