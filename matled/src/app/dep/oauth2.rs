@@ -2,7 +2,7 @@ use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 const RES_FOLDER_PATH: &str = "src/app/res/";
 
-pub async fn oauth2_login_google(scopes: &[&str]) {
+pub async fn get_oauth2_google_token(scopes: &[&str]) -> String{
     /* Read application secret from a file, you can generate this file from the Google Cloud console: https://console.cloud.google.com/ */
     let secret_path = format!("{}credentials.json", RES_FOLDER_PATH);
     let secret = yup_oauth2::read_application_secret(&secret_path)
@@ -23,7 +23,13 @@ pub async fn oauth2_login_google(scopes: &[&str]) {
     /* token(<scopes>) is the one important function of this crate; it does everything to
     obtain a token that can be sent e.g. as Bearer token. */
     match auth.token(scopes).await {
-        Ok(token) => println!("\nThe token is {:?}\n", token),
-        Err(e) => println!("\nError: {:?}\n", e),
+        Ok(token) => {
+            println!("\nThe token is {:?}\n", token);
+            token.token().unwrap_or_default().to_string()
+        },
+        Err(e) => {
+            println!("\nError: {:?}\n", e);
+            String::new()
+        }
     }
 }
