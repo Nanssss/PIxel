@@ -7,6 +7,7 @@ use app::app_main;
     cargo add serde_json
     cargo add tokio --features full
     cargo add reqwest --features json, blocking
+    cargo add yup-oauth2
 */
 
 fn main() {

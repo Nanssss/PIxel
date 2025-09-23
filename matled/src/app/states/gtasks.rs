@@ -1,9 +1,11 @@
 use reqwest::blocking::Client;
 use crate::app::states::app_state::AppContext;
+use crate::app::dep::oauth2::oauth2_login_google;
 
 const GCALENDAR_API_BASE_URL: &str = "...";
 
 /* Public struct containing gtasks data */
+#[derive(Default)] // to be able to fill with default values
 pub struct GTasksData {
     tasks:          Vec<GTask>,     // Vec of tasks
     nb:             usize,          // nb of tasks in tasks
@@ -14,6 +16,7 @@ pub struct GTasksData {
 struct GTask {
     title:          String,         // title of the task
     date:           String,         // date of the task
+    description:    String,         // description of the task
 }
 
 
@@ -26,15 +29,15 @@ impl GTasksData {
     /* GTasksData constructor */
     pub fn new(context: &AppContext) -> Self {
         /* Initialize some data in the struct */
-        // let gtasks_init = init();
+        let gtasks_init = init();
 
         /* Get data from the GCalendar API */
         // let data = get_gtasks(&context.client, &gtasks_init.request_url);
 
         /* Return GTasksData struct */
         GTasksData {
-            tasks:      Vec::new(),     // to complete from GCalendar API call,-> data.xx
-            nb:         4,              // same -> data.nb
+            // tasks:      Vec::new(),     // to complete from GCalendar API call,-> data.xx
+            // nb:         4,              // same -> data.nb
             ..gtasks_init // completes other fields from init data
         }
     }
@@ -67,8 +70,15 @@ impl GTasksData {
 // ================================================================= 
 
 /* Function that initializes the GTasksData struct */
-// fn init() -> GTasksData {
-// }
+fn init() -> GTasksData {
+    // @todo: To correctly use this function, I'll have to use async functions and refactor the whole app
+    oauth2_login_google();
+
+    GTasksData {
+        request_url: GCALENDAR_API_BASE_URL.to_string(),
+        ..Default::default()        // completes other fields with default values
+    }
+}
 
 /* Function to get data from public weather API */
 // fn get_weather(client: &Client, url: &String) -> DailyData {
