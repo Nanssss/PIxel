@@ -1,8 +1,10 @@
-use reqwest::Client;
 use crate::app::states::app_state::AppContext;
-use crate::app::dep::oauth2::oauth2_login_google;
+use crate::app::dep::oauth2::get_oauth2_google_token;
+use reqwest::Client;
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use serde_json::Value;
 
-const GCALENDAR_API_BASE_URL: &str = "...";
+const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary";
 /* 
 Add the GCALENDAR scopes you need here.
 (find them at https://developers.google.com/workspace/calendar/api/auth?hl=fr)
@@ -34,17 +36,13 @@ impl GTasksData {
     /* GTasksData constructor */
     pub async fn new(context: &AppContext) -> Self {
         /* Initialize some data in the struct */
-        let gtasks_init = init().await;
+        let mut gtasks_object = init().await;
 
-        /* Get data from the GCalendar API */
-        // let data = get_gtasks(&context.client, &gtasks_init.request_url).await;
+        /* Get data from the GCalendar API and directly fill gtasks_object */
+        get_gtasks_events(&context.client, &mut gtasks_object).await;
 
         /* Return GTasksData struct */
-        GTasksData {
-            // tasks:      Vec::new(),     // to complete from GCalendar API call,-> data.xx
-            // nb:         4,              // same -> data.nb
-            ..gtasks_init // completes other fields from init data
-        }
+        gtasks_object
     }
 
     /* Method for drawing data to the screen */
@@ -76,8 +74,8 @@ impl GTasksData {
 
 /* Function that initializes the GTasksData struct */
 async fn init() -> GTasksData {
-    // @todo: To correctly use this function, I'll have to use async functions and refactor the whole app
-    oauth2_login_google(GCALENDAR_SCOPES).await;
+    // Perform OAuth2 login to get the token
+    get_oauth2_google_token(GCALENDAR_SCOPES).await;
 
     GTasksData {
         request_url: GCALENDAR_API_BASE_URL.to_string(),
@@ -85,9 +83,57 @@ async fn init() -> GTasksData {
     }
 }
 
-/* Function to get data from public weather API */
-// fn get_weather(client: &Client, url: &String) -> DailyData {
-// }
+/* Function to get data from GTASKS API */
+/*
+There are 2 possible versions for this function:
+    - Using a non-mutable GTasksData as parameter, cloning it and returning a new value. 
+    This is a more idiomatic way in Rust, but require more memory allocation.
+    - Using a mutable GTasksData as parameter, modifying it directly.
+    Here I choose the second option, as it is more efficient in terms of memory usage.
+*/
+async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
+    /* Get token from oauth2 function */
+    let token = get_oauth2_google_token(GCALENDAR_SCOPES).await;
+
+    /* Request parameters */
+    let query_params = &[
+        ("maxResults", "5"),
+        ("orderBy", "startTime"),
+        ("singleEvents", "true"),
+        ("timeMin", "2023-01-01T00:00:00Z"), // Example: fetch events from 2023
+    ];
+
+    /* Base url */
+    let url = format!("{}/events", GCALENDAR_API_BASE_URL);
+
+    /* Send GET request to GTASKS API */
+    let res = client
+        .get(&url)
+        .header(AUTHORIZATION, format!("Bearer {}", token))
+        .header(CONTENT_TYPE, "application/json")
+        .query(query_params)
+        .send()
+        .await
+        .expect("Failed to send GTASKS API request");
+
+    let body = res.text().await.expect("Failed to read response body");
+    println!("GTASKS API Response Body: {}\n", body);
+    // let json: Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+
+    // Parse events
+    // let mut tasks = Vec::new();
+    // if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
+    //     for item in items {
+    //         let title = item.get("summary").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    //         let date = item.get("start").and_then(|v| v.get("dateTime").or_else(|| v.get("date"))).and_then(|v| v.as_str()).unwrap_or("").to_string();
+    //         let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    //         tasks.push(GTask { title, date, description });
+    //     }
+    // }
+    // gtasks_object.nb = tasks.len();
+    // gtasks_object.tasks = tasks;
+    gtasks_object.nb = 5; // Example value
+}
 
 
 // ================================================================= 
