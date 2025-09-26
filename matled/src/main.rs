@@ -8,6 +8,7 @@ use app::app_main;
     cargo add tokio --features full
     cargo add reqwest --features json, blocking
     cargo add yup-oauth2
+    cargo add hyper_util
 */
 
 #[tokio::main]

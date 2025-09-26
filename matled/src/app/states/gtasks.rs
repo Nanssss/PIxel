@@ -1,5 +1,5 @@
 use crate::app::states::app_state::AppContext;
-use crate::app::dep::oauth2::get_oauth2_google_token;
+use crate::app::dep::oauth2::*;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
@@ -14,9 +14,10 @@ const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.ev
 /* Public struct containing gtasks data */
 #[derive(Default)] // to be able to fill with default values
 pub struct GTasksData {
-    tasks:          Vec<GTask>,     // Vec of tasks
-    nb:             usize,          // nb of tasks in tasks
-    request_url:    String,         // full request URL to send to weather API
+    tasks:                  Vec<GTask>,     // Vec of tasks
+    nb:                     usize,          // b of tasks in tasks
+    request_url:            String,         // full request URL to send to weather API
+    oauth2:                 OAuth2Data,    // OAuth2 authenticator data
 }
 
 /* Atomic task */
@@ -76,11 +77,12 @@ impl GTasksData {
 /* Function that initializes the GTasksData struct */
 async fn init() -> GTasksData {
     // Perform OAuth2 login to get the token
-    get_oauth2_google_token(GCALENDAR_SCOPES).await;
+    let auth = oauth2_get_google_authenticator().await;
 
     GTasksData {
-        request_url: GCALENDAR_API_BASE_URL.to_string(),
-        ..Default::default()        // completes other fields with default values
+        request_url:            GCALENDAR_API_BASE_URL.to_string(),
+        oauth2:                 auth,
+        ..Default::default()    // completes other fields with default values
     }
 }
 
@@ -94,7 +96,7 @@ There are 2 possible versions for this function:
 */
 async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
     /* Get token from oauth2 function */
-    let token = get_oauth2_google_token(GCALENDAR_SCOPES).await;
+    let token = oauth2_get_google_token(&gtasks_object.oauth2, GCALENDAR_SCOPES).await;
 
     /* Request parameters */
     let query_params = &[
