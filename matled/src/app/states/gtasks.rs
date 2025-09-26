@@ -3,7 +3,6 @@ use crate::app::dep::oauth2::get_oauth2_google_token;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
-use chrono::Utc;
 
 const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary";
 /* 
@@ -60,8 +59,8 @@ impl GTasksData {
 
     /* Method for fetching data from public API */
     pub async fn fetch_data(&mut self, context: &AppContext) {
-        /* Get data from the GCalendar API */
-        // let data = get_gtasks(&context.client, &self.request_url).await;
+        /* Get data from the GCalendar API and directly fill self */
+        get_gtasks_events(&context.client, self).await;
 
         /* Update self fields */
         // self.tasks = ..;
@@ -106,7 +105,7 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
     ];
 
     /* Base url */
-    let url = format!("{}/events", GCALENDAR_API_BASE_URL);
+    let url = format!("{}/events", gtasks_object.request_url);
 
     /* Send GET request to GTASKS API */
     let res = client

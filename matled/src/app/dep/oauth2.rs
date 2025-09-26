@@ -14,7 +14,7 @@ pub async fn get_oauth2_google_token(scopes: &[&str]) -> String{
     authenticator takes care of caching tokens to disk and refreshing tokens once
     they've expired. */
     let token_cache_path = format!("{}tokencache.json", RES_FOLDER_PATH);
-    let mut auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
+    let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
     .persist_tokens_to_disk(token_cache_path)
     .build()
     .await
