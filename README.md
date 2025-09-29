@@ -9,7 +9,12 @@ Not consistent between gtasks and weather. In gtask I'm passing a mutable class 
 
 Error handling, (if empty object or error for instance).
 
-Mini http-server reachable from a machine on the same local network. Enable/Disable of features, logging.
+On the RPi SD card, add:
+- `/in` folder at the root with a Readme asking for the OAuth2 credentials and a `conf.txt` file containing enabled states.
+- `/log` folder containing logs -> add logging feature.
+
+(Optionnal)
+Add a mini http-server reachable from a machine on the same local network. Enable/Disable of features, logging.
 
 ## OAUTH2 Token Handling
 
