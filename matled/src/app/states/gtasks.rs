@@ -6,8 +6,8 @@ use serde_json::Value;
 
 const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary";
 /* 
-Add the GCALENDAR scopes you need here.
-(find them at https://developers.google.com/workspace/calendar/api/auth?hl=fr)
+    Add the GCALENDAR scopes you need here.
+    (find them at https://developers.google.com/workspace/calendar/api/auth?hl=fr)
 */
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
@@ -17,7 +17,7 @@ pub struct GTasksData {
     tasks:                  Vec<GTask>,     // Vec of tasks
     nb:                     usize,          // b of tasks in tasks
     request_url:            String,         // full request URL to send to weather API
-    oauth2:                 OAuth2Data,    // OAuth2 authenticator data
+    oauth2:                 OAuth2Data,     // OAuth2 authenticator data
 }
 
 /* Atomic task */
@@ -76,7 +76,7 @@ impl GTasksData {
 
 /* Function that initializes the GTasksData struct */
 async fn init() -> GTasksData {
-    // Perform OAuth2 login to get the token
+    // Perform OAuth2 login to get the authenticator
     let auth = oauth2_get_google_authenticator().await;
 
     GTasksData {
@@ -100,10 +100,10 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
 
     /* Request parameters */
     let query_params = &[
-        ("maxResults", "5"),
-        ("orderBy", "startTime"),
-        ("singleEvents", "true"),
-        ("timeMin", &chrono::Utc::now().to_rfc3339()), // Get current time in RFC3339 format
+        ("maxResults",      "5"),
+        ("orderBy",         "startTime"),
+        ("singleEvents",    "true"),
+        ("timeMin",         &chrono::Utc::now().to_rfc3339()), // get current time in RFC3339 format
     ];
 
     /* Base url */
@@ -127,9 +127,20 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
     let mut tasks = Vec::new();
     if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
         for item in items {
-            let title = item.get("summary").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let date = item.get("start").and_then(|v| v.get("dateTime").or_else(|| v.get("date"))).and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let description = item.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let title = item
+                .get("summary")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let date = item
+                .get("start")
+                .and_then(|v| v.get("dateTime").or_else(|| v.get("date")))
+                .and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let description = item
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             tasks.push(GTask { title, date, description });
         }
     }

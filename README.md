@@ -4,14 +4,16 @@
 
 # Notes
 
-Not consistent between gtasks and weather. In gtask I pass a mutable class and I modify it directly, while I'm cloning it in weather.
+Not consistent between gtasks and weather. In gtask I'm passing a mutable class and I'm modifying it directly, while I'm cloning it in weather.
 
-Gestion d'erreurs, (si objet vide ou en erreur comme le token par ex, ou l'authentificator).
+
+Error handling, (if empty object or error for instance).
+
+Mini http-server reachable from a machine on the same local network. Enable/Disable of features, logging.
 
 ## OAUTH2 Token Handling
 
 On the final version, we would like to do the token creation on a PC, and then just forward the token files to the embedded board where this program will run, in `/src/app/res/credentials.json` and `/src/app/res/tokencache.json`.
 
-Either only return authenticator in GTASKS init and then use it to get the token, or just don't call it in init, but as it is now I'm calling 2 times get_oauth2_google_token for nothing.
 
-Mettre le authenticator et le token dans contexte plutot que dans GTASKS ?
+Put OAuth2 authenticator in Context, because it might be needed to share it between different states in the future.
