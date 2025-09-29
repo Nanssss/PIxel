@@ -14,7 +14,8 @@ On the RPi SD card, add:
 - `/log` folder containing logs -> add logging feature.
 
 (Optionnal)
-Add a mini http-server reachable from a machine on the same local network. Enable/Disable of features, logging.
+- Add a ftp (or onther technology) server to be able to access config file and logs remotely on the local network.
+- Add a mini http-server reachable from a machine on the same local network. Enable/Disable of features, logging.
 
 ## OAUTH2 Token Handling
 
