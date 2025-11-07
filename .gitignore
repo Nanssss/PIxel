@@ -1,31 +1,28 @@
-# Ignorer les fichiers binaires compilés
-matled/target/
+# Ignore compiled binary files
+target/
 
-# Ignorer les fichiers de configuration Cargo
-matled/Cargo.lock
+# Ignore the lock file
+Cargo.lock
 
-# Ignorer les fichiers de configuration de l'environnement
-matled/.cargo/config
+# Ignore local environment configuration files
+.cargo/config
 
-# Ignorer les fichiers de cache Cargo
-matled/.cargo/registry/cache/
-matled/.cargo/registry/index/
-matled/.cargo/registry/src/
+# Ignore Cargo cache files
+.cargo/registry/cache/
+.cargo/registry/index/
+.cargo/registry/src/
 
-# Ignorer les fichiers de cache de Cargo
-matled/.cargo/git/db/
+# Ignore Git database files within Cargo
+.cargo/git/db/
 
-# Ignorer les fichiers de documentation générés
-matled/docs/
+# Ignore generated documentation files
+docs/
 
-# Ignorer les fichiers de test
-matled/tests/
+# Ignore test files
+tests/
 
-# Ignorer les fichiers de configuration IDE
-matled/.vscode/
-
-
-# ----------------------------------------------------------------------------
+# Ignore Visual Studio Code settings
+.vscode/
 
 # Ignore credentials file
 credentials.json
