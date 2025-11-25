@@ -21,6 +21,10 @@ docs/
 # Ignore test files
 tests/
 
+# Ignore log files
+*.log
+log/
+
 # Ignore Visual Studio Code settings
 .vscode/
 
