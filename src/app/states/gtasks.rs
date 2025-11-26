@@ -3,6 +3,7 @@ use crate::app::dep::oauth2::*;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
+use tracing::{trace, info};
 
 const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary";
 /* 
@@ -49,7 +50,7 @@ impl GTasksData {
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        println!("\
+        info!("\
         TASKS:
             ==========================================
             | Title             | {}
@@ -120,7 +121,7 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
         .expect("Failed to send GTASKS API request");
 
     let body = res.text().await.expect("Failed to read response body");
-    // println!("GTASKS API Response Body: {}\n", body);
+    trace!("GTASKS API Response Body: {}\n", body);
     let json: Value = serde_json::from_str(&body).expect("Failed to parse JSON");
 
     // Parse events
@@ -144,7 +145,7 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
             tasks.push(GTask { title, date, description });
         }
     }
-    println!("Parsed Tasks: {:#?}", tasks);
+    trace!("Parsed Tasks: {:#?}", tasks);
     gtasks_object.nb = tasks.len();
     gtasks_object.tasks = tasks;
 }
