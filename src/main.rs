@@ -3,8 +3,8 @@ use app::app_main;
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::{EnvFilter, LevelFilter}};
 use tracing_appender::{rolling, non_blocking::WorkerGuard};
-use tracing::info;
 use std::sync::OnceLock;
+use tracing::info;
 
 /* Notes:
     cargo add serde --features derive

@@ -1,5 +1,6 @@
 use yup_oauth2::{InstalledFlowAuthenticator, authenticator::Authenticator, InstalledFlowReturnMethod};
 use yup_oauth2::hyper_rustls::HttpsConnector;
+use tracing::{trace, error};
 
 const RES_FOLDER_PATH: &str = "src/app/res/";
 
@@ -44,11 +45,11 @@ pub async fn oauth2_get_google_token(oauth2_data: &OAuth2Data, scopes: &[&str]) 
     obtain a token that can be sent e.g. as Bearer token. */
     match oauth2_data.authenticator.as_ref().unwrap().token(scopes).await {
         Ok(token) => {
-            println!("\nThe token is {:?}\n", token);
+            trace!("\nThe token is {:?}\n", token);
             token.token().unwrap_or_default().to_string()
         },
         Err(e) => {
-            println!("\nError: {:?}\n", e);
+            error!("\nError: {:?}\n", e);
             String::new()
         }
     }
