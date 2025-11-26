@@ -44,9 +44,9 @@ impl WeatherData {
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        info!("\
-        WEATHER:
+        info!("\n
             ==========================================
+                            [WEATHER]
             | weather_summary   | {}
             | temp_max          | {}
             | temp_min          | {}

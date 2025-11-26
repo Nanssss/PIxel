@@ -25,12 +25,12 @@ impl ClockData {
 
     /* Method fro drawing data to the screen */
     pub fn draw(&self) {
-        info!("\
-        CLOCK:
-            ======================
-            | Date  | {}
-            | Time  | {}
-            ======================\
+        info!("\n
+        ======================
+               [CLOCK]
+        | Date  | {}
+        | Time  | {}
+        ======================\
         ", self.date, self.time);
     }
 

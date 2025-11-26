@@ -50,13 +50,30 @@ impl GTasksData {
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        info!("\
-        TASKS:
-            ==========================================
-            | Title             | {}
-            | Date              | {}
-            ==========================================\
-        ", self.nb, self.nb);
+        // info!("\
+        // TASKS:
+        //     ==========================================
+        //     | Title             | {}
+        //     | Date              | {}
+        //     ==========================================\
+        // ", self.nb, self.nb);
+
+        /* Print number of tasks */
+        info!("=========================================");
+        info!("             [GOOGLE TASKS]");
+        info!("| Found {} Tasks:", self.nb);
+
+        /* Print each task */
+        for task in &self.tasks {
+            info!(
+                "|   - {} ({})", task.title, task.date);
+            
+            if !task.description.is_empty() {
+                info!(
+                    "|     | Description: {}", task.description);
+            }
+        }
+        info!("=========================================\n");
     }
 
     /* Method for fetching data from public API */
