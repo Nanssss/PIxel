@@ -3,6 +3,7 @@ use serde::{Deserialize, Deserializer};
 use reqwest::Client;
 use std::fs;
 use crate::app::states::app_state::AppContext;
+use tracing::{trace, info};
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
@@ -43,7 +44,7 @@ impl WeatherData {
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        println!("\
+        info!("\
         WEATHER:
             ==========================================
             | weather_summary   | {}
@@ -112,7 +113,7 @@ async fn get_weather(client: &Client, url: &String) -> DailyData {
         .send()
         .await
         .unwrap();
-    // println!("{response:?}");
+    trace!("{response:?}");
 
     /* Deserialize response */
     let parsed: WeatherResponse = response
@@ -121,7 +122,7 @@ async fn get_weather(client: &Client, url: &String) -> DailyData {
     .unwrap();
 
     // let body = response.unwrap().text().unwrap();
-    // println!("{parsed:?}");
+    trace!("{parsed:?}");
 
     parsed.daily
 }

@@ -1,4 +1,5 @@
 use chrono::Local;
+use tracing::info;
 
 /* Public struct containing clock data */
 pub struct ClockData {
@@ -24,7 +25,7 @@ impl ClockData {
 
     /* Method fro drawing data to the screen */
     pub fn draw(&self) {
-        println!("\
+        info!("\
         CLOCK:
             ======================
             | Date  | {}
