@@ -44,15 +44,8 @@ impl WeatherData {
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        info!("\n
-            ==========================================
-                            [WEATHER]
-            | weather_summary   | {}
-            | temp_max          | {}
-            | temp_min          | {}
-            | precipitation_sum | {}
-            ==========================================\
-        ", self.weather_summary, self.temp_max, self.temp_min, self.precipitation_sum);
+        info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
+            self.weather_summary, self.temp_max, self.temp_min, self.precipitation_sum);
     }
 
     /* Method for fetching data from public API */
@@ -103,6 +96,7 @@ fn init() -> WeatherData {
     }
 }
 
+
 /* Function to get data from public weather API */
 async fn get_weather(client: &Client, url: &String) -> DailyData {
 
@@ -113,7 +107,7 @@ async fn get_weather(client: &Client, url: &String) -> DailyData {
         .send()
         .await
         .unwrap();
-    trace!("{response:?}");
+    trace!("Weather response: {response:?}");
 
     /* Deserialize response */
     let parsed: WeatherResponse = response
@@ -121,8 +115,7 @@ async fn get_weather(client: &Client, url: &String) -> DailyData {
     .await
     .unwrap();
 
-    // let body = response.unwrap().text().unwrap();
-    trace!("{parsed:?}");
+    trace!("Weather parsed response: {parsed:?}");
 
     parsed.daily
 }

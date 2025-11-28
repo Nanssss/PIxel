@@ -50,30 +50,17 @@ impl GTasksData {
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        // info!("\
-        // TASKS:
-        //     ==========================================
-        //     | Title             | {}
-        //     | Date              | {}
-        //     ==========================================\
-        // ", self.nb, self.nb);
-
         /* Print number of tasks */
-        info!("=========================================");
-        info!("             [GOOGLE TASKS]");
-        info!("| Found {} Tasks:", self.nb);
+        info!("[GOOGLE TASKS] - Found {} Tasks", self.nb);
 
         /* Print each task */
         for task in &self.tasks {
-            info!(
-                "|   - {} ({})", task.title, task.date);
+            info!("[GOOGLE TASKS] - Task: {} ({})", task.title, task.date);
             
             if !task.description.is_empty() {
-                info!(
-                    "|     | Description: {}", task.description);
+                info!("[GOOGLE TASKS] - Task description: {}", task.description);
             }
         }
-        info!("=========================================\n");
     }
 
     /* Method for fetching data from public API */
@@ -138,7 +125,7 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
         .expect("Failed to send GTASKS API request");
 
     let body = res.text().await.expect("Failed to read response body");
-    trace!("GTASKS API Response Body: {}\n", body);
+    trace!("GTASKS API Response Body: {}", body);
     let json: Value = serde_json::from_str(&body).expect("Failed to parse JSON");
 
     // Parse events

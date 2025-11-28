@@ -50,20 +50,22 @@ fn init_logging() {
 
     /* 2. Console layer (stdout) */
     let console_layer = fmt::layer()
-        .with_target(false)        // cleaner output
         .with_thread_names(true)
-        .with_thread_ids(true)
+        .with_target(true)
+        .with_line_number(true)          // include line number
         .with_ansi(true)           // colors for stdout
         .compact();                // shorter logs
 
     /* 3. File layer */
     let file_layer = fmt::layer()
         .with_writer(non_blocking) // async, non-blocking writes
-        .with_target(false)
-        .with_thread_names(true)
-        .with_thread_ids(true)
         .with_ansi(false)          // no ANSI codes in file
-        .event_format(fmt::format().json()); // either nothing (full), json, pretty, or compact
+        .event_format(
+            fmt::format()
+            .with_thread_names(true)
+            .with_target(true)
+            .with_line_number(true)          // include line number
+            .compact()); // either nothing (full), json, pretty, or compact
 
     /* 4. Filtering */
     // default: info ; overridable by RUST_LOG=debug ./app
