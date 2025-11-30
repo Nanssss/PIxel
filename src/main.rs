@@ -16,6 +16,7 @@ use tracing::info;
     cargo add tracing
     cargo add tracing-subscriber --features env-filter json
     cargo add tracing-appender
+    cargo add anyhow
 */
 
 /* Constants */
@@ -52,20 +53,20 @@ fn init_logging() {
     let console_layer = fmt::layer()
         .with_thread_names(true)
         .with_target(true)
-        .with_line_number(true)          // include line number
-        .with_ansi(true)           // colors for stdout
-        .compact();                // shorter logs
+        .with_line_number(true)     // include line number
+        .with_ansi(true)            // colors for stdout
+        .compact();                 // shorter logs
 
     /* 3. File layer */
     let file_layer = fmt::layer()
-        .with_writer(non_blocking) // async, non-blocking writes
-        .with_ansi(false)          // no ANSI codes in file
+        .with_writer(non_blocking)  // async, non-blocking writes
+        .with_ansi(false)           // no ANSI codes in file
         .event_format(
             fmt::format()
             .with_thread_names(true)
             .with_target(true)
-            .with_line_number(true)          // include line number
-            .compact()); // either nothing (full), json, pretty, or compact
+            .with_line_number(true) // include line number
+            .compact());            // either nothing (full), json, pretty, or compact
 
     /* 4. Filtering */
     // default: info ; overridable by RUST_LOG=debug ./app

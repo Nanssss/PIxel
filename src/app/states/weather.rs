@@ -3,7 +3,8 @@ use serde::{Deserialize, Deserializer};
 use reqwest::Client;
 use std::fs;
 use crate::app::states::app_state::AppContext;
-use tracing::{trace, info};
+use tracing::{trace, info, error};
+use anyhow::{Result, Context};
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
@@ -27,18 +28,35 @@ impl WeatherData {
     /* WeatherData constructor */
     pub async fn new(context: &AppContext) -> Self {
         /* Initialize some data in the struct */
-        let weather_init = init();
+        let weather_init = match init() {
+            Ok(w) => w,
+            Err(e) => {
+                /* Handle the error */
+                error!("Failed to initialize weather data: {:?}", e);
+                return WeatherData::default();
+            }
+        };
 
         /* Get data from the weather API */
-        let data = get_weather(&context.client, &weather_init.request_url).await;
+        let data = match get_weather(&context.client, &weather_init.request_url).await {
+            Ok(d) => d,
+            Err(e) => {
+                /* Handle the error */
+                error!("Failed to fetch weather data: {:?}", e);
+                return weather_init;
+            }
+        };
 
         /* Return WeatherData struct */
         WeatherData {
-            weather_summary:    code_to_weather(data.weather_code),         // translate weather_code into HR String
+            weather_summary:    code_to_weather(data.weather_code).unwrap_or_else(|e| {
+                error!("Failed to parse weather code: {:?}", e);
+                "Unknown".to_string()
+            }),
             temp_max:           data.apparent_temperature_max.to_string(),
             temp_min:           data.apparent_temperature_min.to_string(),
             precipitation_sum:  data.precipitation_sum.to_string(),
-            ..weather_init // completes other fields from init data
+            ..weather_init // fill other fields from init data
         }
     }
 
@@ -51,13 +69,21 @@ impl WeatherData {
     /* Method for fetching data from public API */
     pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the weather API */
-        let data= get_weather(&context.client, &self.request_url).await;
-
-        /* Update self fields */
-        self.weather_summary =      code_to_weather(data.weather_code);         // translate weather_code into HR String
-        self.temp_max =             data.apparent_temperature_max.to_string();
-        self.temp_min =             data.apparent_temperature_min.to_string();
-        self.precipitation_sum =    data.precipitation_sum.to_string();
+        match get_weather(&context.client, &self.request_url).await {
+            Ok(data) => {
+                self.weather_summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
+                    error!("Failed to parse weather code: {:?}", e);
+                    "Unknown".to_string()
+                });
+                self.temp_max = data.apparent_temperature_max.to_string();
+                self.temp_min = data.apparent_temperature_min.to_string();
+                self.precipitation_sum = data.precipitation_sum.to_string();
+            }
+            Err(e) => {
+                /* Handle the error */
+                error!("Failed to fetch weather data: {:?}", e);
+            }
+        }
     }
 }
 
@@ -67,7 +93,7 @@ impl WeatherData {
 // ================================================================= 
 
 /* Function that initializes the WeatherData struct */
-fn init() -> WeatherData {
+fn init() -> Result<WeatherData> {
     /* Create a JSON with the request parameters */
     let params = json!({
         "latitude": "43.57",
@@ -84,47 +110,47 @@ fn init() -> WeatherData {
     });
 
     /* Construct query params URL from the json */
-    let params_url = json_to_query_string(&params);
+    let params_url = json_to_query_string(&params)?;
 
     /* Concatenate base URL and query params */
     let full_url = format!("{}?{}", WEATHER_API_BASE_URL, params_url);
 
     /* Return initialized WeatherData struct */
-    WeatherData {
+    Ok(WeatherData {
         request_url: full_url,
         ..Default::default()            // use default values for other fields
-    }
+    })
 }
 
 
 /* Function to get data from public weather API */
-async fn get_weather(client: &Client, url: &String) -> DailyData {
-
-    /* Create Reqwest Client */
+async fn get_weather(client: &Client, url: &String) -> Result<DailyData> {
+    /* Send HTTP GET request */
     let response = client
         .get(url)
         .header("User-Agent", "reqwest")
         .send()
         .await
-        .unwrap();
+        .context("failed to send weather API request")?;
     trace!("Weather response: {response:?}");
 
-    /* Deserialize response */
+    /* Deserialize response JSON */
     let parsed: WeatherResponse = response
-    .json::<WeatherResponse>()
-    .await
-    .unwrap();
-
+        .json::<WeatherResponse>()
+        .await
+        .context("failed to deserialize weather API response")?;
     trace!("Weather parsed response: {parsed:?}");
 
-    parsed.daily
+    Ok(parsed.daily)
 }
 
 
 /* Transforms json to query parameters URL */
-fn json_to_query_string(params_json: &serde_json::Value) -> String {
-    params_json.as_object()
-        .expect("Expected a json object")
+fn json_to_query_string(params_json: &serde_json::Value) -> Result<String> {
+    let obj = params_json.as_object()
+        .context("expected a json object for weather parameters")?;
+    
+    let query_string = obj
         .iter()
         .map(|(key, value)| {
             let clean_value = value
@@ -136,7 +162,9 @@ fn json_to_query_string(params_json: &serde_json::Value) -> String {
             format!("{}={}", key, clean_value)
         })
         .collect::<Vec<String>>()
-        .join("&")
+        .join("&");
+    
+    Ok(query_string)
 }
 
 
@@ -146,35 +174,31 @@ where
     T: Default + Clone + Deserialize<'de>,
     D: Deserializer<'de>,
 {
-    let vec: Vec<T> = Vec::deserialize(deserializer)?; // deserialization as a Vec<T>
-    Ok(vec.into_iter().next().unwrap_or_default()) // take out first element or send back Default
+    let vec: Vec<T> = Vec::deserialize(deserializer)?;  // deserialization as a Vec<T>
+    Ok(vec.into_iter().next().unwrap_or_default())      // take out first element or send back Default
 }
 
 
 /* Function used to translate weather WMO code to weather String using json code file */
-fn code_to_weather(code: i32) -> String {
-    let mut description: String = "Invalid weather code".to_string();
-
+fn code_to_weather(code: i32) -> Result<String> {
     /* Open json file as String */
-    let wmo_code_file =
-        fs::read_to_string("./src/app/states/res/wmo_codes.json")
-        .expect("Failed to read weather code JSON file");
+    let wmo_code_file = fs::read_to_string("./src/app/states/res/wmo_codes.json")
+        .context("failed to read weather code JSON file")?;
 
     /* Convert String as json Value */
-    let wmo_code_json: serde_json::Value =
-        serde_json::from_str(&wmo_code_file)
-        .expect("Invalid weather code JSON");
+    let wmo_code_json: serde_json::Value = serde_json::from_str(&wmo_code_file)
+        .context("failed to parse weather code JSON")?;
 
     /* Get description field ("entry": "day": "description": "xx") */
-    if let Some(entry) = wmo_code_json.get(code.to_string()) {
-        description = entry
-            .get("day")
-            .and_then(|d| d.get("description"))
-            .unwrap().
-            to_string();
-    }
+    let description = wmo_code_json
+        .get(code.to_string())
+        .and_then(|entry| entry.get("day"))
+        .and_then(|d| d.get("description"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown")
+        .to_string();
 
-    description
+    Ok(description)
 }
 
 

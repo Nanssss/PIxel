@@ -3,7 +3,9 @@ use crate::app::dep::oauth2::*;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
-use tracing::{trace, info};
+use tracing::{trace, info, error};
+use anyhow::{Result, Context};
+use chrono::Utc;
 
 const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary";
 /* 
@@ -42,7 +44,9 @@ impl GTasksData {
         let mut gtasks_object = init().await;
 
         /* Get data from the GCalendar API and directly fill gtasks_object */
-        get_gtasks_events(&context.client, &mut gtasks_object).await;
+        if let Err(e) = get_gtasks_events(&context.client, &mut gtasks_object).await {
+            error!("Failed to fetch Google Tasks during init: {:?}", e);
+        }
 
         /* Return GTasksData struct */
         gtasks_object
@@ -66,11 +70,9 @@ impl GTasksData {
     /* Method for fetching data from public API */
     pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the GCalendar API and directly fill self */
-        get_gtasks_events(&context.client, self).await;
-
-        /* Update self fields */
-        // self.tasks = ..;
-        self.nb = 5;            // data.nb
+        if let Err(e) = get_gtasks_events(&context.client, self).await {
+            error!("Failed to fetch Google Tasks: {:?}", e);
+        }
     }
 }
 
@@ -82,7 +84,13 @@ impl GTasksData {
 /* Function that initializes the GTasksData struct */
 async fn init() -> GTasksData {
     // Perform OAuth2 login to get the authenticator
-    let auth = oauth2_get_google_authenticator().await;
+    let auth = match oauth2_get_google_authenticator().await {
+        Ok(a) => a,
+        Err(e) => {
+            error!("Failed to initialize OAuth2 authenticator: {:?}", e);
+            OAuth2Data::default()
+        }
+    };
 
     GTasksData {
         request_url:            GCALENDAR_API_BASE_URL.to_string(),
@@ -99,16 +107,17 @@ There are 2 possible versions for this function:
     - Using a mutable GTasksData as parameter, modifying it directly.
     Here I choose the second option, as it is more efficient in terms of memory usage.
 */
-async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
+async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) -> Result<()> {
     /* Get token from oauth2 function */
-    let token = oauth2_get_google_token(&gtasks_object.oauth2, GCALENDAR_SCOPES).await;
+    let token = oauth2_get_google_token(&gtasks_object.oauth2, GCALENDAR_SCOPES).await
+        .context("failed to obtain oauth2 token")?;
 
     /* Request parameters */
     let query_params = &[
         ("maxResults",      "5"),
         ("orderBy",         "startTime"),
         ("singleEvents",    "true"),
-        ("timeMin",         &chrono::Utc::now().to_rfc3339()), // get current time in RFC3339 format
+        ("timeMin",         &Utc::now().to_rfc3339()), // get current time in RFC3339 format
     ];
 
     /* Base url */
@@ -122,11 +131,11 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
         .query(query_params)
         .send()
         .await
-        .expect("Failed to send GTASKS API request");
+        .context("failed to send GTASKS API request")?;
 
-    let body = res.text().await.expect("Failed to read response body");
+    let body = res.text().await.context("failed to read response body")?;
     trace!("GTASKS API Response Body: {}", body);
-    let json: Value = serde_json::from_str(&body).expect("Failed to parse JSON");
+    let json: Value = serde_json::from_str(&body).context("failed to parse GTASKS JSON")?;
 
     // Parse events
     let mut tasks = Vec::new();
@@ -152,6 +161,8 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
     trace!("Parsed Tasks: {:#?}", tasks);
     gtasks_object.nb = tasks.len();
     gtasks_object.tasks = tasks;
+
+    Ok(())
 }
 
 

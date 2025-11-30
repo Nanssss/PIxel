@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.100"
 chrono = "0.4.39"
 hyper-util = "0.1.17"
 reqwest = { version = "0.12.14", features = ["blocking", "json"] }
