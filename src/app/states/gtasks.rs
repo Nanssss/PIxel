@@ -41,7 +41,14 @@ impl GTasksData {
     /* GTasksData constructor */
     pub async fn new(context: &AppContext) -> Self {
         /* Initialize some data in the struct */
-        let mut gtasks_object = init().await;
+        let mut gtasks_object = match init().await {
+            Ok(a) => a,
+            Err(e) => {
+                /* Handle the error */
+                error!("Failed to initialize OAuth2 authenticator: {:?}", e);
+                return GTasksData::default();
+            }
+        };
 
         /* Get data from the GCalendar API and directly fill gtasks_object */
         if let Err(e) = get_gtasks_events(&context.client, &mut gtasks_object).await {
@@ -82,21 +89,15 @@ impl GTasksData {
 // ================================================================= 
 
 /* Function that initializes the GTasksData struct */
-async fn init() -> GTasksData {
+async fn init() -> Result<GTasksData> {
     // Perform OAuth2 login to get the authenticator
-    let auth = match oauth2_get_google_authenticator().await {
-        Ok(a) => a,
-        Err(e) => {
-            error!("Failed to initialize OAuth2 authenticator: {:?}", e);
-            OAuth2Data::default()
-        }
-    };
+    let auth = oauth2_get_google_authenticator().await?;
 
-    GTasksData {
+    Ok(GTasksData {
         request_url:            GCALENDAR_API_BASE_URL.to_string(),
         oauth2:                 auth,
         ..Default::default()    // completes other fields with default values
-    }
+    })
 }
 
 /* Function to get data from GTASKS API */

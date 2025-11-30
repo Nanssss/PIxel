@@ -22,7 +22,7 @@ pub async fn oauth2_get_google_authenticator() -> Result<OAuth2Data> {
     let secret_path = format!("{}credentials.json", RES_FOLDER_PATH);
     let secret = yup_oauth2::read_application_secret(&secret_path)
         .await
-        .context("Failed to read application secret")?;
+        .context("failed to read application secret")?;
 
     /* Create an authenticator that uses an InstalledFlow to authenticate. The
     authentication tokens are persisted to a file named tokencache.json. The
@@ -33,7 +33,7 @@ pub async fn oauth2_get_google_authenticator() -> Result<OAuth2Data> {
         .persist_tokens_to_disk(token_cache_path)
         .build()
         .await
-        .context("Failed to create InstalledFlowAuthenticator")?;
+        .context("failed to create InstalledFlowAuthenticator")?;
 
     Ok(OAuth2Data {
         authenticator: Some(auth),
@@ -51,7 +51,7 @@ pub async fn oauth2_get_google_token(oauth2_data: &OAuth2Data, scopes: &[&str]) 
     let token = auth
         .token(scopes)
         .await
-        .context("Failed to obtain OAuth2 token")?;
+        .context("failed to obtain OAuth2 token")?;
 
     trace!("The token is {:?}", token);
     Ok(token.token().ok_or_else(|| {
