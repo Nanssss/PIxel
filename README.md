@@ -15,9 +15,9 @@ If you want to use GTask feature, you must start be getting Google OAuth2 crende
 
 First, go to [Google Cloud console](https://console.cloud.google.com/). Head to API and Servicies -> Identifiers -> Create new identifier -> OAuth Client ID. In general, the recommended way is to choose "Desktop Application" here, as limited peripherals only have limited accesses to your Google APIs.
 
-Then, when your ids are created, download them and put them in `/in/credentials.json`.
+Then, when your ids are created, download them and put them in `in/credentials.json`.
 
 ## Tune your config as you want
 
-Edit `/in/config.toml` config as you want. Here, you can enable/disable features.
+Edit `in/config.toml` config as you want. Here, you can enable/disable features.
 
