@@ -49,18 +49,21 @@ impl ClockData {
 }
 
 impl ClockConfig {
+    /* ClockConfig constructor */
     pub fn new() -> Self {
         ClockConfig {
             enabled: true,
         }
     }
 
+    /* ClockConfig setter */
     pub fn set(&mut self, state: bool) {
         self.enabled = state;
     }
 }
 
-impl ClockState {
+impl ClockState { 
+    /* ClockState constructor */
     pub fn new() -> Self {
         ClockState {
             data:   ClockData::new(),
