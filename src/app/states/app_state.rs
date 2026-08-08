@@ -39,10 +39,9 @@ enum AppStatesEnum {
     Weather,
     GTasks,
 }
-
 /* Struct storing all states */
 struct AppStates {
-    clock:      ClockData,
+    clock:      ClockState,
     weather:    WeatherData,
     gtasks:     GTasksData,
 }
@@ -61,8 +60,10 @@ impl App {
     pub async fn new() -> Self {
         let context =   AppContext::new();
         let weather =   WeatherData::new(&context).await;
-        let clock =     ClockData::new();
+        let clock =     ClockState::new();
         let gtasks =    GTasksData::new(&context).await;
+
+        // Todo: Add config retrieving here
 
         App { 
             context,
@@ -78,7 +79,7 @@ impl App {
     /* Call draw() method of corresponding state */
     pub fn draw(&self) {
         match &self.current_state {
-            AppStatesEnum::Clock    => self.states.clock.draw(),
+            AppStatesEnum::Clock    => self.states.clock.data.draw(),
             AppStatesEnum::Weather  => self.states.weather.draw(),
             AppStatesEnum::GTasks   => self.states.gtasks.draw(),
         }
@@ -87,7 +88,7 @@ impl App {
     /* Call fetch_data() method of corresponding state */
     pub async fn fetch_data(&mut self) {
         match &mut self.current_state{
-            AppStatesEnum::Clock    => self.states.clock.fetch_data(),
+            AppStatesEnum::Clock    => self.states.clock.data.fetch_data(),
             AppStatesEnum::Weather  => self.states.weather.fetch_data(&self.context).await,
             AppStatesEnum::GTasks   => self.states.gtasks.fetch_data(&self.context).await,
         }

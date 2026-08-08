@@ -7,6 +7,18 @@ pub struct ClockData {
     time: String,
 }
 
+/* Public struct containing clock config */
+pub struct ClockConfig {
+    enabled: bool,
+}
+
+
+/* Public struct containing global clock state */
+pub struct ClockState {
+    pub data: ClockData,
+    pub config: ClockConfig,
+}
+
 
 // ================================================================= 
 //    Methods implementation                                       |
@@ -36,6 +48,26 @@ impl ClockData {
     }
 }
 
+impl ClockConfig {
+    pub fn new() -> Self {
+        ClockConfig {
+            enabled: true,
+        }
+    }
+
+    pub fn set(&mut self, state: bool) {
+        self.enabled = state;
+    }
+}
+
+impl ClockState {
+    pub fn new() -> Self {
+        ClockState {
+            data:   ClockData::new(),
+            config: ClockConfig::new(),
+        }
+    }
+}
 
 // ================================================================= 
 //    Static functions                                             |

@@ -3,7 +3,7 @@ use yup_oauth2::hyper_rustls::HttpsConnector;
 use tracing::{trace};
 use anyhow::{Result, Context};
 
-const RES_FOLDER_PATH: &str = "src/app/res/";
+const RES_FOLDER_PATH: &str = "in/";
 
 pub struct OAuth2Data {
     pub authenticator: Option<Authenticator<HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>>>,

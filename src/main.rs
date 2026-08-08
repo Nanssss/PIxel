@@ -17,6 +17,7 @@ use tracing::info;
     cargo add tracing-subscriber --features env-filter json
     cargo add tracing-appender
     cargo add anyhow
+    cargo add toml
 */
 
 /* Constants */
