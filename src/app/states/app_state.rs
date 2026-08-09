@@ -93,7 +93,7 @@ impl App {
 
         let context =   AppContext::new();
         let weather =   WeatherData::new(&context).await;
-        let clock =     ClockState::new(); // todo: pass config here
+        let clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone())); // todo: pass config here
         let gtasks =    GTasksData::new(&context).await;
 
         App { 
@@ -110,7 +110,7 @@ impl App {
     /* Call draw() method of corresponding state */
     pub fn draw(&self) {
         match &self.current_state {
-            AppStatesEnum::Clock    => self.states.clock.data.draw(),
+            AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(),
             AppStatesEnum::Weather  => self.states.weather.draw(),
             AppStatesEnum::GTasks   => self.states.gtasks.draw(),
         }
@@ -119,7 +119,7 @@ impl App {
     /* Call fetch_data() method of corresponding state */
     pub async fn fetch_data(&mut self) {
         match &mut self.current_state{
-            AppStatesEnum::Clock    => self.states.clock.data.fetch_data(),
+            AppStatesEnum::Clock    => self.states.clock.data.as_mut().unwrap().fetch_data(),
             AppStatesEnum::Weather  => self.states.weather.fetch_data(&self.context).await,
             AppStatesEnum::GTasks   => self.states.gtasks.fetch_data(&self.context).await,
         }

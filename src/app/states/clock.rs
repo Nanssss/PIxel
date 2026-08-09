@@ -14,10 +14,18 @@ pub struct ClockConfig {
     enabled: bool,
 }
 
+/* Default values for config */
+impl Default for ClockConfig {
+    fn default() -> Self {
+        ClockConfig {
+            enabled: true,
+        }
+    }
+}
 
 /* Public struct containing global clock state */
 pub struct ClockState {
-    pub data: ClockData,
+    pub data: Option<ClockData>,
     pub config: ClockConfig,
 }
 
@@ -50,26 +58,18 @@ impl ClockData {
     }
 }
 
-impl ClockConfig {
-    /* ClockConfig constructor */
-    pub fn new() -> Self {
-        ClockConfig {
-            enabled: true,
-        }
-    }
-
-    /* ClockConfig setter */
-    pub fn set(&mut self, state: bool) {
-        self.enabled = state;
-    }
-}
-
 impl ClockState { 
     /* ClockState constructor */
-    pub fn new() -> Self {
+    pub fn new(config: Option<ClockConfig>) -> Self {
+        /* 
+        * data is initialized only if config is Some(x)
+        * If in the future ClockData needs config, use config.as_ref().map(|cfg| ClockData::new(cfg))
+        */
+        let data = config.is_some().then(ClockData::new);
+
         ClockState {
-            data:   ClockData::new(),
-            config: ClockConfig::new(),
+            data,
+            config: config.unwrap_or_default(),
         }
     }
 }
