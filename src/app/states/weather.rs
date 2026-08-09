@@ -8,6 +8,21 @@ use anyhow::{Result, Context};
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
+/* Public struct containing clock config */
+#[derive(Debug, Clone, Deserialize)]
+pub struct WeatherConfig {
+    enabled: bool,
+}
+
+/* Default values for config */
+impl Default for WeatherConfig {
+    fn default() -> Self {
+        WeatherConfig{
+            enabled: true,
+        }
+    }
+}
+
 /* Public struct containing weather data */
 #[derive(Default)] // used to be able to fill with default values
 pub struct WeatherData {
@@ -16,6 +31,13 @@ pub struct WeatherData {
     temp_min:           String,     // minimum daily temperature
     precipitation_sum:  String,     // sum of daily precipitations (including rain, snow, hail)
     request_url:        String,     // full request URL to send to weather API
+}
+
+
+/* Public struct containing global clock state */
+pub struct WeatherState {
+    pub data: Option<WeatherData>,
+    pub config: WeatherConfig,
 }
 
 
@@ -87,6 +109,25 @@ impl WeatherData {
     }
 }
 
+
+impl WeatherState{ 
+    /* WeatherState constructor */
+    pub async fn new(config: Option<WeatherConfig>, context: &AppContext) -> Self {
+        /* 
+        * data is initialized only if config is Some(x)
+        * If in the future WeatherData needs config, replace '_' with cfg
+        */
+        let data = match &config {
+            Some(_) => Some(WeatherData::new(context).await),
+            None => None,
+        };
+
+        WeatherState {
+            data,
+            config: config.unwrap_or_default(),
+        }
+    }
+}
 
 // ================================================================= 
 //    Static functions                                             |

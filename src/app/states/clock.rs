@@ -2,12 +2,6 @@ use chrono::Local;
 use tracing::info;
 use serde::Deserialize;
 
-/* Public struct containing clock data */
-pub struct ClockData {
-    date: String,
-    time: String,
-}
-
 /* Public struct containing clock config */
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClockConfig {
@@ -22,6 +16,13 @@ impl Default for ClockConfig {
         }
     }
 }
+
+/* Public struct containing clock data */
+pub struct ClockData {
+    date: String,
+    time: String,
+}
+
 
 /* Public struct containing global clock state */
 pub struct ClockState {
