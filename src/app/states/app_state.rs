@@ -1,13 +1,11 @@
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
-use anyhow::Context;
 use reqwest::Client;
 use std::sync::Arc;
 use std::fs;
 use tracing::{info, warn};
 use serde::Deserialize;
-use anyhow::Result;
 
 /* First state on boot */
 const START_STATE:AppStatesEnum = AppStatesEnum::Weather;
@@ -34,6 +32,32 @@ impl AppContext {
     }
 }
 
+// ================================================================= 
+//    AppConfig part                                                |
+// ================================================================= 
+
+/* Struct used to match the TOML file */
+#[derive(Debug, Clone, Deserialize)]
+pub struct AppConfig {
+    pub clock: ClockConfig,
+}
+
+impl AppConfig {
+    /* Function that loads the config from the config.toml file */
+    pub fn load() -> Option<Self> {
+        let file_path = format!("{}config.toml", CONFIG_FILE_PATH);
+
+        let content = fs::read_to_string(&file_path).inspect_err(|e| {
+            warn!("Error while reading {file_path}:\n{e}");
+        }).ok()?;
+
+        let config: AppConfig= toml::from_str(&content).inspect_err(|e| {
+            warn!("failed to deserialize {file_path}:\n{e}");
+        }).ok()?;   
+
+        Some(config)
+    }
+}
 
 // ================================================================= 
 //    App part                                                     |
@@ -45,6 +69,7 @@ enum AppStatesEnum {
     Weather,
     GTasks,
 }
+
 /* Struct storing all states */
 struct AppStates {
     clock:      ClockState,
@@ -59,19 +84,11 @@ pub struct App {
     current_state:  AppStatesEnum,
 }
 
-/* Struct used to match the TOML file */
-#[derive(Debug, Clone, Deserialize)]
-pub struct AppConfig {
-    pub clock: ClockConfig,
-}
-
 /* App methods implementation */
 impl App {
-
     /* App constructor */
     pub async fn new() -> Self {
-        // Todo: Add config retrieving here
-        let config = load_config_file();
+        let config = AppConfig::load();
         info!("config:\n{config:?}");
 
         let context =   AppContext::new();
@@ -118,16 +135,3 @@ impl App {
     }
 }
 
-fn load_config_file() -> Option<AppConfig> {
-    let file_path = format!("{}config.toml", CONFIG_FILE_PATH);
-    // let content = fs::read_to_string(file_path).context("failed to read {file_path}")?;
-    let content = fs::read_to_string(&file_path).inspect_err(|e| {
-        warn!("Error while reading {file_path}:\n{e}");
-    }).ok()?;
-
-    let config: AppConfig= toml::from_str(&content).inspect_err(|e| {
-        warn!("failed to deserialize {file_path}:\n{e}");
-    }).ok()?;   
-
-    Some(config)
-}
