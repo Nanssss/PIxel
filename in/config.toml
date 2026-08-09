@@ -1,9 +1,2 @@
 [clock]
 enabled = true
-
-[gtasks]
-enabled = true
-
-[weather]
-enabled = true
-
