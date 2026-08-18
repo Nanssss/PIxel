@@ -3,3 +3,6 @@ enabled = true
 
 [weather]
 enabled = true
+
+[gtasks]
+enabled = true

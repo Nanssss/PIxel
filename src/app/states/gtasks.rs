@@ -2,6 +2,7 @@ use crate::app::states::app_state::AppContext;
 use crate::app::dep::oauth2::*;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
@@ -14,12 +15,27 @@ const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/cal
 */
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
+/* Public struct containing gtasks config */
+#[derive(Debug, Clone, Deserialize)]
+pub struct GTasksConfig {
+    enabled: bool,
+}
+
+/* Default values for config */
+impl Default for GTasksConfig {
+    fn default() -> Self {
+        GTasksConfig {
+            enabled: true,
+        }
+    }
+}
+
 /* Public struct containing gtasks data */
 #[derive(Default)] // to be able to fill with default values
 pub struct GTasksData {
     tasks:                  Vec<GTask>,     // Vec of tasks
     nb:                     usize,          // b of tasks in tasks
-    request_url:            String,         // full request URL to send to weather API
+    request_url:            String,         // full request URL to send to Google API
     oauth2:                 OAuth2Data,     // OAuth2 authenticator data
 }
 
@@ -29,6 +45,12 @@ struct GTask {
     title:          String,         // title of the task
     date:           String,         // date of the task
     description:    String,         // description of the task
+}
+
+/* Public struct containing global clock state */
+pub struct GTasksState {
+    pub data: Option<GTasksData>,
+    pub config: GTasksConfig,
 }
 
 
@@ -79,6 +101,25 @@ impl GTasksData {
         /* Get data from the GCalendar API and directly fill self */
         if let Err(e) = get_gtasks_events(&context.client, self).await {
             error!("Failed to fetch Google Tasks: {:?}", e);
+        }
+    }
+}
+
+impl GTasksState{ 
+    /* GTasksState constructor */
+    pub async fn new(config: Option<GTasksConfig>, context: &AppContext) -> Self {
+        /* 
+        * data is initialized only if config is Some(x)
+        * If in the future GTasksData needs config, replace '_' with cfg
+        */
+        let data = match &config {
+            Some(_) => Some(GTasksData::new(context).await),
+            None => None,
+        };
+
+        GTasksState {
+            data,
+            config: config.unwrap_or_default(),
         }
     }
 }

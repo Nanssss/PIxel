@@ -8,7 +8,7 @@ use anyhow::{Result, Context};
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
-/* Public struct containing clock config */
+/* Public struct containing weather config */
 #[derive(Debug, Clone, Deserialize)]
 pub struct WeatherConfig {
     enabled: bool,
@@ -110,7 +110,7 @@ impl WeatherData {
 }
 
 
-impl WeatherState{ 
+impl WeatherState { 
     /* WeatherState constructor */
     pub async fn new(config: Option<WeatherConfig>, context: &AppContext) -> Self {
         /* 

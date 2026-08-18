@@ -41,6 +41,7 @@ impl AppContext {
 pub struct AppConfig {
     pub clock: ClockConfig,
     pub weather: WeatherConfig,
+    pub gtasks: GTasksConfig,
 }
 
 impl AppConfig {
@@ -75,7 +76,7 @@ enum AppStatesEnum {
 struct AppStates {
     clock:      ClockState,
     weather:    WeatherState,
-    gtasks:     GTasksData,
+    gtasks:     GTasksState,
 }
 
 /* App struct */
@@ -95,7 +96,7 @@ impl App {
         let context =   AppContext::new();
         let weather =   WeatherState::new(config.as_ref().map(|cfg| cfg.weather.clone()), &context).await;
         let clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone())); // todo: pass config here
-        let gtasks =    GTasksData::new(&context).await;
+        let gtasks =    GTasksState::new(config.as_ref().map(|cfg| cfg.gtasks.clone()), &context).await;
 
         App { 
             context,
@@ -113,7 +114,7 @@ impl App {
         match &self.current_state {
             AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(),
             AppStatesEnum::Weather  => self.states.weather.data.as_ref().unwrap().draw(),
-            AppStatesEnum::GTasks   => self.states.gtasks.draw(),
+            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().unwrap().draw(),
         }
     }
 
@@ -122,7 +123,7 @@ impl App {
         match &mut self.current_state{
             AppStatesEnum::Clock    => self.states.clock.data.as_mut().unwrap().fetch_data(),
             AppStatesEnum::Weather  => self.states.weather.data.as_mut().unwrap().fetch_data(&self.context).await,
-            AppStatesEnum::GTasks   => self.states.gtasks.fetch_data(&self.context).await,
+            AppStatesEnum::GTasks   => self.states.gtasks.data.as_mut().unwrap().fetch_data(&self.context).await,
         }
     }
 
