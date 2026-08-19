@@ -100,35 +100,41 @@ impl App {
         let context =   AppContext::new();
 
         /* Build states */
+        let mut clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone()));
         let weather =   WeatherState::new(config.as_ref().map(|cfg| cfg.weather.clone()), &context).await;
-        let clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone()));
         let gtasks =    GTasksState::new(config.as_ref().map(|cfg| cfg.gtasks.clone()), &context).await;
 
         /* Select first state */
         let mut current_state = START_STATE;
+        let mut found_enabled = false;
 
-        for i in 0..NB_STATES {
+        for _ in 0..NB_STATES {
             /* Check if current state is enabled */
             let is_enabled = match current_state {
-                AppStatesEnum::Clock   => config.as_ref().map(|cfg| cfg.clock.enabled).unwrap(),
-                AppStatesEnum::Weather => config.as_ref().map(|cfg| cfg.weather.enabled).unwrap(),
-                AppStatesEnum::GTasks  => config.as_ref().map(|cfg| cfg.gtasks.enabled).unwrap(),
+                AppStatesEnum::Clock   => clock.config.enabled,
+                AppStatesEnum::Weather => weather.config.enabled,
+                AppStatesEnum::GTasks  => gtasks.config.enabled,
             };
 
             /* Stop searching as soon as we found an enabled state */
             if is_enabled {
+                found_enabled = true;
                 break;
             }
 
             /* Move to next state if the current was disabled */
-            match current_state {
-                AppStatesEnum::Clock    => current_state = AppStatesEnum::Weather,
-                AppStatesEnum::Weather  => current_state = AppStatesEnum::GTasks,
-                AppStatesEnum::GTasks   => current_state = AppStatesEnum::Clock,
-            }
+            current_state = match current_state {
+                AppStatesEnum::Clock    => AppStatesEnum::Weather,
+                AppStatesEnum::Weather  => AppStatesEnum::GTasks,
+                AppStatesEnum::GTasks   => AppStatesEnum::Clock,
+            };
+        }
 
-            /* If no state is enabled, the clock will be enabled */
-            // TODO: Enable clock if no other state is enabled
+        /* If no state is enabled, the clock will be enabled */
+        if !found_enabled {
+            warn!("All states were disabled in config! Falling back to Clock.");
+            current_state = AppStatesEnum::Clock;
+            clock.config.enabled = true;
         }
 
         /* Return constructed App */
