@@ -5,7 +5,7 @@ use serde::Deserialize;
 /* Public struct containing clock config */
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClockConfig {
-    enabled: bool,
+    pub enabled: bool,
 }
 
 /* Default values for config */

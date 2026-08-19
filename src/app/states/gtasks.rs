@@ -18,7 +18,7 @@ const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.ev
 /* Public struct containing gtasks config */
 #[derive(Debug, Clone, Deserialize)]
 pub struct GTasksConfig {
-    enabled: bool,
+    pub enabled: bool,
 }
 
 /* Default values for config */
@@ -105,7 +105,7 @@ impl GTasksData {
     }
 }
 
-impl GTasksState{ 
+impl GTasksState {
     /* GTasksState constructor */
     pub async fn new(config: Option<GTasksConfig>, context: &AppContext) -> Self {
         /* 

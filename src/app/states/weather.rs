@@ -11,7 +11,7 @@ const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 /* Public struct containing weather config */
 #[derive(Debug, Clone, Deserialize)]
 pub struct WeatherConfig {
-    enabled: bool,
+    pub enabled: bool,
 }
 
 /* Default values for config */

@@ -8,10 +8,12 @@ use tracing::{info, warn};
 use serde::Deserialize;
 
 /* First state on boot */
-const START_STATE:AppStatesEnum = AppStatesEnum::Weather;
+const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
 
 /* Config file path */
 const CONFIG_FILE_PATH: &str = "in/";
+
+const NB_STATES: u8 = 3;
 
 // ================================================================= 
 //   AppContext part                                               |
@@ -90,14 +92,46 @@ pub struct App {
 impl App {
     /* App constructor */
     pub async fn new() -> Self {
+        /* Build config */
         let config = AppConfig::load();
         info!("config:\n{config:?}");
 
+        /* Build context */
         let context =   AppContext::new();
+
+        /* Build states */
         let weather =   WeatherState::new(config.as_ref().map(|cfg| cfg.weather.clone()), &context).await;
-        let clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone())); // todo: pass config here
+        let clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone()));
         let gtasks =    GTasksState::new(config.as_ref().map(|cfg| cfg.gtasks.clone()), &context).await;
 
+        /* Select first state */
+        let mut current_state = START_STATE;
+
+        for i in 0..NB_STATES {
+            /* Check if current state is enabled */
+            let is_enabled = match current_state {
+                AppStatesEnum::Clock   => config.as_ref().map(|cfg| cfg.clock.enabled).unwrap(),
+                AppStatesEnum::Weather => config.as_ref().map(|cfg| cfg.weather.enabled).unwrap(),
+                AppStatesEnum::GTasks  => config.as_ref().map(|cfg| cfg.gtasks.enabled).unwrap(),
+            };
+
+            /* Stop searching as soon as we found an enabled state */
+            if is_enabled {
+                break;
+            }
+
+            /* Move to next state if the current was disabled */
+            match current_state {
+                AppStatesEnum::Clock    => current_state = AppStatesEnum::Weather,
+                AppStatesEnum::Weather  => current_state = AppStatesEnum::GTasks,
+                AppStatesEnum::GTasks   => current_state = AppStatesEnum::Clock,
+            }
+
+            /* If no state is enabled, the clock will be enabled */
+            // TODO: Enable clock if no other state is enabled
+        }
+
+        /* Return constructed App */
         App { 
             context,
             states: AppStates {
@@ -105,7 +139,7 @@ impl App {
                 weather,
                 gtasks,
             },
-            current_state: START_STATE,
+            current_state,
         }
     }
 
@@ -129,10 +163,26 @@ impl App {
 
     /* Switch to next state */
     pub fn next_state(&mut self) {
-        match &self.current_state {
-            AppStatesEnum::Clock    => self.current_state = AppStatesEnum::Weather,
-            AppStatesEnum::Weather  => self.current_state = AppStatesEnum::GTasks,
-            AppStatesEnum::GTasks   => self.current_state = AppStatesEnum::Clock,
+        /* Iterate through the states until we find an enabled one */
+        for _ in 0..NB_STATES {
+            /* Move to next state */
+            match &self.current_state {
+                AppStatesEnum::Clock    => self.current_state = AppStatesEnum::Weather,
+                AppStatesEnum::Weather  => self.current_state = AppStatesEnum::GTasks,
+                AppStatesEnum::GTasks   => self.current_state = AppStatesEnum::Clock,
+            }
+
+            /* Check if it is enabled */
+            let is_enabled = match self.current_state {
+                AppStatesEnum::Clock   => self.states.clock.config.enabled,
+                AppStatesEnum::Weather => self.states.weather.config.enabled,
+                AppStatesEnum::GTasks  => self.states.gtasks.config.enabled,
+            };
+
+            /* Stop searching as soon as we found an enabled state */
+            if is_enabled {
+                break;
+            }
         }
     }
 }
