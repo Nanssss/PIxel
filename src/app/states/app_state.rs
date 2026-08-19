@@ -47,7 +47,7 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    /* Function that loads the config from the config.toml file */
+    /* Loads the config from the config.toml file */
     pub fn load() -> Option<Self> {
         let file_path = format!("{}config.toml", CONFIG_FILE_PATH);
 
@@ -72,6 +72,17 @@ enum AppStatesEnum {
     Clock,
     Weather,
     GTasks,
+}
+
+impl AppStatesEnum {
+    /* Returns the next state in the application cycle */
+    pub fn next(&self) -> Self {
+        match self {
+            AppStatesEnum::Clock   => AppStatesEnum::Weather,
+            AppStatesEnum::Weather => AppStatesEnum::GTasks,
+            AppStatesEnum::GTasks  => AppStatesEnum::Clock,
+        }
+    }
 }
 
 /* Struct storing all states */
@@ -123,11 +134,7 @@ impl App {
             }
 
             /* Move to next state if the current was disabled */
-            current_state = match current_state {
-                AppStatesEnum::Clock    => AppStatesEnum::Weather,
-                AppStatesEnum::Weather  => AppStatesEnum::GTasks,
-                AppStatesEnum::GTasks   => AppStatesEnum::Clock,
-            };
+            current_state = current_state.next();
         }
 
         /* If no state is enabled, the clock will be enabled */
@@ -172,11 +179,7 @@ impl App {
         /* Iterate through the states until we find an enabled one */
         for _ in 0..NB_STATES {
             /* Move to next state */
-            match &self.current_state {
-                AppStatesEnum::Clock    => self.current_state = AppStatesEnum::Weather,
-                AppStatesEnum::Weather  => self.current_state = AppStatesEnum::GTasks,
-                AppStatesEnum::GTasks   => self.current_state = AppStatesEnum::Clock,
-            }
+            self.current_state = self.current_state.next();
 
             /* Check if it is enabled */
             let is_enabled = match self.current_state {
