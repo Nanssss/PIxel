@@ -75,12 +75,21 @@ enum AppStatesEnum {
 }
 
 impl AppStatesEnum {
-    /* Returns the next state in the application cycle */
+    /* Return the next state in the application cycle */
     pub fn next(&self) -> Self {
         match self {
             AppStatesEnum::Clock   => AppStatesEnum::Weather,
             AppStatesEnum::Weather => AppStatesEnum::GTasks,
             AppStatesEnum::GTasks  => AppStatesEnum::Clock,
+        }
+    }
+
+    /* Return if state is enabled */
+    pub fn is_enabled(&self, states: &AppStates) -> bool {
+        match self {
+            AppStatesEnum::Clock   => states.clock.config.get_state(),
+            AppStatesEnum::Weather => states.weather.config.enabled,
+            AppStatesEnum::GTasks  => states.gtasks.config.enabled,
         }
     }
 }
@@ -111,24 +120,22 @@ impl App {
         let context =   AppContext::new();
 
         /* Build states */
-        let mut clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone()));
+        let clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone()));
         let weather =   WeatherState::new(config.as_ref().map(|cfg| cfg.weather.clone()), &context).await;
         let gtasks =    GTasksState::new(config.as_ref().map(|cfg| cfg.gtasks.clone()), &context).await;
+        let mut states = AppStates {
+            clock,
+            weather,
+            gtasks,
+        };
 
         /* Select first state */
         let mut current_state = START_STATE;
         let mut found_enabled = false;
 
         for _ in 0..NB_STATES {
-            /* Check if current state is enabled */
-            let is_enabled = match current_state {
-                AppStatesEnum::Clock   => clock.config.get_state(),
-                AppStatesEnum::Weather => weather.config.enabled,
-                AppStatesEnum::GTasks  => gtasks.config.enabled,
-            };
-
             /* Stop searching as soon as we found an enabled state */
-            if is_enabled {
+            if current_state.is_enabled(&states) {
                 found_enabled = true;
                 break;
             }
@@ -141,17 +148,13 @@ impl App {
         if !found_enabled {
             warn!("All states were disabled in config! Falling back to Clock.");
             current_state = AppStatesEnum::Clock;
-            clock.config.set_state(true);
+            states.clock.config.set_state(true);
         }
 
         /* Return constructed App */
         App { 
             context,
-            states: AppStates {
-                clock,
-                weather,
-                gtasks,
-            },
+            states,
             current_state,
         }
     }
@@ -181,15 +184,8 @@ impl App {
             /* Move to next state */
             self.current_state = self.current_state.next();
 
-            /* Check if it is enabled */
-            let is_enabled = match self.current_state {
-                AppStatesEnum::Clock   => self.states.clock.config.get_state(),
-                AppStatesEnum::Weather => self.states.weather.config.enabled,
-                AppStatesEnum::GTasks  => self.states.gtasks.config.enabled,
-            };
-
             /* Stop searching as soon as we found an enabled state */
-            if is_enabled {
+            if self.current_state.is_enabled(&self.states) {
                 break;
             }
         }
