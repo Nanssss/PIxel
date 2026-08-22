@@ -5,15 +5,25 @@ use serde::Deserialize;
 /* Public struct containing clock config */
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClockConfig {
-    pub enabled: bool,
+    enabled: bool,
 }
 
-/* Default values for config */
+/* Default trait for config */
 impl Default for ClockConfig {
     fn default() -> Self {
         ClockConfig {
             enabled: true,
         }
+    }
+}
+
+impl ClockConfig {
+    pub fn set_state(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    pub fn get_state(&self) -> bool {
+        self.enabled
     }
 }
 
