@@ -109,13 +109,16 @@ impl GTasksState {
     /* GTasksState constructor */
     pub async fn new(config: Option<GTasksConfig>, context: &AppContext) -> Self {
         /* 
-        * data is initialized only if config is Some(x)
+        * data is initialized only if config is Some(x) and enabled
         * If in the future GTasksData needs config, replace '_' with cfg
         */
-        let data = match &config {
-            Some(_) => Some(GTasksData::new(context).await),
-            None => None,
-        };
+        let mut data = None;
+        
+        if let Some(cfg) = &config {
+            if cfg.enabled {
+                data = Some(GTasksData::new(context).await);
+            }
+        }
 
         GTasksState {
             data,

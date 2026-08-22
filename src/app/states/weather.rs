@@ -114,13 +114,16 @@ impl WeatherState {
     /* WeatherState constructor */
     pub async fn new(config: Option<WeatherConfig>, context: &AppContext) -> Self {
         /* 
-        * data is initialized only if config is Some(x)
+        * data is initialized only if config is Some(x) and enabled
         * If in the future WeatherData needs config, replace '_' with cfg
         */
-        let data = match &config {
-            Some(_) => Some(WeatherData::new(context).await),
-            None => None,
-        };
+        let mut data = None;
+        
+        if let Some(cfg) = &config {
+            if cfg.enabled {
+                data = Some(WeatherData::new(context).await);
+            }
+        }
 
         WeatherState {
             data,
