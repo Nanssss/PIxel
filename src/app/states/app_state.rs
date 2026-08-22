@@ -129,27 +129,8 @@ impl App {
             gtasks,
         };
 
-        /* Select first state */
-        let mut current_state = START_STATE;
-        let mut found_enabled = false;
-
-        for _ in 0..NB_STATES {
-            /* Stop searching as soon as we found an enabled state */
-            if current_state.is_enabled(&states) {
-                found_enabled = true;
-                break;
-            }
-
-            /* Move to next state if the current was disabled */
-            current_state = current_state.next();
-        }
-
-        /* If no state is enabled, fall back to Clock state */
-        if !found_enabled {
-            warn!("All states were disabled in config! Falling back to Clock.");
-            current_state = AppStatesEnum::Clock;
-            states.clock.config.set_state(true);
-        }
+        /* Get current state */
+        let current_state = select_first_state(&mut states);
 
         /* Return constructed App */
         App { 
@@ -192,3 +173,29 @@ impl App {
     }
 }
 
+// ================================================================= 
+//    Static functions                                             |
+// ================================================================= 
+fn select_first_state(states: &mut AppStates) -> AppStatesEnum {
+    let mut current_state = START_STATE;
+    let mut found_enabled = false;
+
+    for _ in 0..NB_STATES {
+        /* Stop searching as soon as we found an enabled state */
+        if current_state.is_enabled(states) {
+            found_enabled = true;
+            break;
+        }
+
+        /* Move to next state if the current was disabled */
+        current_state = current_state.next();
+    }
+
+    /* If no state is enabled, fall back to Clock state */
+    if !found_enabled {
+        warn!("All states were disabled in config! Falling back to Clock.");
+        states.clock.config.set_state(true);
+    }
+
+    AppStatesEnum::Clock
+}
