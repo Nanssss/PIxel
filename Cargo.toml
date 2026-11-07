@@ -7,6 +7,7 @@ license = "GPL-2.0-only"
 
 [dependencies]
 anyhow = "1.0.100"
+cc = "1.11.1"
 chrono = "0.4.39"
 hyper-util = "0.1.17"
 reqwest = { version = "0.12.14", features = ["blocking", "json"] }
@@ -18,3 +19,6 @@ tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json", "registry"] }
 yup-oauth2 = "12.1.0"
+
+[build-dependencies]
+bindgen = "0.73.2"
