@@ -88,8 +88,8 @@ impl AppStatesEnum {
     pub fn is_enabled(&self, states: &AppStates) -> bool {
         match self {
             AppStatesEnum::Clock   => states.clock.config.get_state(),
-            AppStatesEnum::Weather => states.weather.config.enabled,
-            AppStatesEnum::GTasks  => states.gtasks.config.enabled,
+            AppStatesEnum::Weather => states.weather.config.get_state(),
+            AppStatesEnum::GTasks  => states.gtasks.config.get_state(),
         }
     }
 }

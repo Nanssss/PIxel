@@ -30,6 +30,16 @@ impl Default for GTasksConfig {
     }
 }
 
+impl GTasksConfig {
+    pub fn set_state(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    pub fn get_state(&self) -> bool {
+        self.enabled
+    }
+}
+
 /* Public struct containing gtasks data */
 #[derive(Default)] // to be able to fill with default values
 pub struct GTasksData {

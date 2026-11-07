@@ -23,6 +23,16 @@ impl Default for WeatherConfig {
     }
 }
 
+impl WeatherConfig {
+    pub fn set_state(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    pub fn get_state(&self) -> bool {
+        self.enabled
+    }
+}
+
 /* Public struct containing weather data */
 #[derive(Default)] // used to be able to fill with default values
 pub struct WeatherData {
