@@ -2,11 +2,7 @@ use crate::app::states::app_state::AppContext;
 use crate::app::dep::oauth2::*;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
-use serde::{Deserialize, Deserializer};
 use serde_json::Value;
-use tracing::{trace, info, error};
-use anyhow::{Result, Context};
-use chrono::Utc;
 
 const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary";
 /* 
@@ -15,37 +11,12 @@ const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/cal
 */
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
-/* Public struct containing gtasks config */
-#[derive(Debug, Clone, Deserialize)]
-pub struct GTasksConfig {
-    pub enabled: bool,
-}
-
-/* Default values for config */
-impl Default for GTasksConfig {
-    fn default() -> Self {
-        GTasksConfig {
-            enabled: true,
-        }
-    }
-}
-
-impl GTasksConfig {
-    pub fn set_state(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
-
-    pub fn get_state(&self) -> bool {
-        self.enabled
-    }
-}
-
 /* Public struct containing gtasks data */
 #[derive(Default)] // to be able to fill with default values
 pub struct GTasksData {
     tasks:                  Vec<GTask>,     // Vec of tasks
     nb:                     usize,          // b of tasks in tasks
-    request_url:            String,         // full request URL to send to Google API
+    request_url:            String,         // full request URL to send to weather API
     oauth2:                 OAuth2Data,     // OAuth2 authenticator data
 }
 
@@ -57,12 +28,6 @@ struct GTask {
     description:    String,         // description of the task
 }
 
-/* Public struct containing global clock state */
-pub struct GTasksState {
-    pub data: Option<GTasksData>,
-    pub config: GTasksConfig,
-}
-
 
 // ================================================================= 
 //    Methods implementation                                       |
@@ -71,72 +36,36 @@ pub struct GTasksState {
 impl GTasksData {
 
     /* GTasksData constructor */
-    pub async fn new(context: &AppContext) -> Result<Self> {
+    pub async fn new(context: &AppContext) -> Self {
         /* Initialize some data in the struct */
-        let mut gtasks_object = init()
-            .await
-            .context("Failed to initialize OAuth2 authenticator")?;
+        let mut gtasks_object = init().await;
 
         /* Get data from the GCalendar API and directly fill gtasks_object */
-        get_gtasks_events(&context.client, &mut gtasks_object)
-            .await
-            .context("Failed to fetch Google Tasks during init")?;
+        get_gtasks_events(&context.client, &mut gtasks_object).await;
 
         /* Return GTasksData struct */
-        Ok(gtasks_object)
+        gtasks_object
     }
 
     /* Method for drawing data to the screen */
     pub fn draw(&self) {
-        /* Print number of tasks */
-        info!("[GOOGLE TASKS] - Found {} Tasks", self.nb);
-
-        /* Print each task */
-        for task in &self.tasks {
-            info!("[GOOGLE TASKS] - Task: {} ({})", task.title, task.date);
-            
-            if !task.description.is_empty() {
-                info!("[GOOGLE TASKS] - Task description: {}", task.description);
-            }
-        }
+        println!("\
+        TASKS:
+            ==========================================
+            | Title             | {}
+            | Date              | {}
+            ==========================================\
+        ", self.nb, self.nb);
     }
 
     /* Method for fetching data from public API */
     pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the GCalendar API and directly fill self */
-        if let Err(e) = get_gtasks_events(&context.client, self).await {
-            error!("Failed to fetch Google Tasks: {:?}", e);
-        }
-    }
-}
+        get_gtasks_events(&context.client, self).await;
 
-impl GTasksState {
-    /* GTasksState constructor */
-    pub async fn new(config: Option<GTasksConfig>, context: &AppContext) -> Self {
-        /* 
-        * data is initialized only if config is Some(x) and enabled
-        * If in the future GTasksData needs config, replace '_' with cfg
-        */
-        let mut config = config.unwrap_or_default();
-        let mut data = None;
-        
-        if config.get_state() {
-            match GTasksData::new(context).await {
-                Ok(d) => {
-                    data = Some(d);
-                }
-                Err(e) => {
-                    error!("Failed to initialize GTasks, automatically disabling state.\n{e:#}");
-                    config.set_state(false);
-                }
-
-            }
-        }
-
-        GTasksState {
-            data,
-            config,
-        }
+        /* Update self fields */
+        // self.tasks = ..;
+        self.nb = 5;            // data.nb
     }
 }
 
@@ -146,15 +75,15 @@ impl GTasksState {
 // ================================================================= 
 
 /* Function that initializes the GTasksData struct */
-async fn init() -> Result<GTasksData> {
+async fn init() -> GTasksData {
     // Perform OAuth2 login to get the authenticator
-    let auth = oauth2_get_google_authenticator().await?;
+    let auth = oauth2_get_google_authenticator().await;
 
-    Ok(GTasksData {
+    GTasksData {
         request_url:            GCALENDAR_API_BASE_URL.to_string(),
         oauth2:                 auth,
         ..Default::default()    // completes other fields with default values
-    })
+    }
 }
 
 /* Function to get data from GTASKS API */
@@ -165,17 +94,16 @@ There are 2 possible versions for this function:
     - Using a mutable GTasksData as parameter, modifying it directly.
     Here I choose the second option, as it is more efficient in terms of memory usage.
 */
-async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) -> Result<()> {
+async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) {
     /* Get token from oauth2 function */
-    let token = oauth2_get_google_token(&gtasks_object.oauth2, GCALENDAR_SCOPES).await
-        .context("failed to obtain oauth2 token")?;
+    let token = oauth2_get_google_token(&gtasks_object.oauth2, GCALENDAR_SCOPES).await;
 
     /* Request parameters */
     let query_params = &[
         ("maxResults",      "5"),
         ("orderBy",         "startTime"),
         ("singleEvents",    "true"),
-        ("timeMin",         &Utc::now().to_rfc3339()), // get current time in RFC3339 format
+        ("timeMin",         &chrono::Utc::now().to_rfc3339()), // get current time in RFC3339 format
     ];
 
     /* Base url */
@@ -189,11 +117,11 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) -> R
         .query(query_params)
         .send()
         .await
-        .context("failed to send GTASKS API request")?;
+        .expect("Failed to send GTASKS API request");
 
-    let body = res.text().await.context("failed to read response body")?;
-    trace!("GTASKS API Response Body: {}", body);
-    let json: Value = serde_json::from_str(&body).context("failed to parse GTASKS JSON")?;
+    let body = res.text().await.expect("Failed to read response body");
+    // println!("GTASKS API Response Body: {}\n", body);
+    let json: Value = serde_json::from_str(&body).expect("Failed to parse JSON");
 
     // Parse events
     let mut tasks = Vec::new();
@@ -216,11 +144,9 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) -> R
             tasks.push(GTask { title, date, description });
         }
     }
-    trace!("Parsed Tasks: {:#?}", tasks);
+    println!("Parsed Tasks: {:#?}", tasks);
     gtasks_object.nb = tasks.len();
     gtasks_object.tasks = tasks;
-
-    Ok(())
 }
 
 

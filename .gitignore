@@ -21,13 +21,8 @@ docs/
 # Ignore test files
 tests/
 
-# Ignore log files
-*.log
-log/
-
-# Ignore IDE settings
+# Ignore Visual Studio Code settings
 .vscode/
-*.vim
 
 # Ignore credentials file
 credentials.json

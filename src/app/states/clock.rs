@@ -1,43 +1,9 @@
 use chrono::Local;
-use tracing::info;
-use serde::Deserialize;
-
-/* Public struct containing clock config */
-#[derive(Debug, Clone, Deserialize)]
-pub struct ClockConfig {
-    enabled: bool,
-}
-
-/* Default trait for config */
-impl Default for ClockConfig {
-    fn default() -> Self {
-        ClockConfig {
-            enabled: true,
-        }
-    }
-}
-
-impl ClockConfig {
-    pub fn set_state(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
-
-    pub fn get_state(&self) -> bool {
-        self.enabled
-    }
-}
 
 /* Public struct containing clock data */
 pub struct ClockData {
     date: String,
     time: String,
-}
-
-
-/* Public struct containing global clock state */
-pub struct ClockState {
-    pub data: Option<ClockData>,
-    pub config: ClockConfig,
 }
 
 
@@ -58,7 +24,13 @@ impl ClockData {
 
     /* Method fro drawing data to the screen */
     pub fn draw(&self) {
-        info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
+        println!("\
+        CLOCK:
+            ======================
+            | Date  | {}
+            | Time  | {}
+            ======================\
+        ", self.date, self.time);
     }
 
     /* Method for fetching data */
@@ -69,26 +41,6 @@ impl ClockData {
     }
 }
 
-impl ClockState { 
-    /* ClockState constructor */
-    pub fn new(config: Option<ClockConfig>) -> Self {
-        /* 
-        * data is initialized only if config is Some(x) and enabled
-        * If in the future ClockData needs config, use config.as_ref().map(|cfg| ClockData::new(cfg))
-        */
-        let config = config.unwrap_or_default();
-        let mut data = None;
-        
-        if config.get_state() {
-            data = Some(ClockData::new());
-        }
-
-        ClockState {
-            data,
-            config
-        }
-    }
-}
 
 // ================================================================= 
 //    Static functions                                             |
