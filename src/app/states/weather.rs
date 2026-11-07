@@ -58,16 +58,10 @@ pub struct WeatherState {
 impl WeatherData {
 
     /* WeatherData constructor */
-    pub async fn new(context: &AppContext) -> Self {
+    pub async fn new(context: &AppContext) -> Result<Self> {
         /* Initialize some data in the struct */
-        let weather_init = match init() {
-            Ok(w) => w,
-            Err(e) => {
-                /* Handle the error */
-                error!("Failed to initialize weather data: {:?}", e);
-                return WeatherData::default();
-            }
-        };
+        let weather_init = init()
+            .context("Failed to initialize weather data: {:?}")?;
 
         /* Get data from the weather API */
         let data = match get_weather(&context.client, &weather_init.request_url).await {
@@ -75,12 +69,12 @@ impl WeatherData {
             Err(e) => {
                 /* Handle the error */
                 error!("Failed to fetch weather data: {:?}", e);
-                return weather_init;
+                return Ok(weather_init);
             }
         };
 
         /* Return WeatherData struct */
-        WeatherData {
+        Ok(WeatherData {
             weather_summary:    code_to_weather(data.weather_code).unwrap_or_else(|e| {
                 error!("Failed to parse weather code: {:?}", e);
                 "Unknown".to_string()
@@ -89,7 +83,7 @@ impl WeatherData {
             temp_min:           data.apparent_temperature_min.to_string(),
             precipitation_sum:  data.precipitation_sum.to_string(),
             ..weather_init // fill other fields from init data
-        }
+        })
     }
 
     /* Method for drawing data to the screen */
@@ -127,17 +121,24 @@ impl WeatherState {
         * data is initialized only if config is Some(x) and enabled
         * If in the future WeatherData needs config, replace '_' with cfg
         */
+        let mut config = config.unwrap_or_default();
         let mut data = None;
         
-        if let Some(cfg) = &config {
-            if cfg.enabled {
-                data = Some(WeatherData::new(context).await);
+        if config.get_state() {
+            match WeatherData::new(context).await {
+                Ok(d) => {
+                    data = Some(d);
+                }
+                Err(e) => {
+                    error!("Failed to initialize Weather ({e:#}). Automatically disabling state.");
+                    config.set_state(false);
+                }
             }
         }
 
         WeatherState {
             data,
-            config: config.unwrap_or_default(),
+            config
         }
     }
 }
