@@ -126,7 +126,7 @@ impl GTasksState {
                     data = Some(d);
                 }
                 Err(e) => {
-                    error!("Failed to initialize GTasks ({e:#}). Automatically disabling state.");
+                    error!("Failed to initialize GTasks, automatically disabling state.\n{e:#}");
                     config.set_state(false);
                 }
 

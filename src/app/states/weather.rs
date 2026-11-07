@@ -130,7 +130,7 @@ impl WeatherState {
                     data = Some(d);
                 }
                 Err(e) => {
-                    error!("Failed to initialize Weather ({e:#}). Automatically disabling state.");
+                    error!("Failed to initialize Weather, automatically disabling state.\n{e:#}");
                     config.set_state(false);
                 }
             }
