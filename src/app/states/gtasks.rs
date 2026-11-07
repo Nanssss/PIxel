@@ -71,24 +71,19 @@ pub struct GTasksState {
 impl GTasksData {
 
     /* GTasksData constructor */
-    pub async fn new(context: &AppContext) -> Self {
+    pub async fn new(context: &AppContext) -> Result<Self> {
         /* Initialize some data in the struct */
-        let mut gtasks_object = match init().await {
-            Ok(a) => a,
-            Err(e) => {
-                /* Handle the error */
-                error!("Failed to initialize OAuth2 authenticator: {:?}", e);
-                return GTasksData::default();
-            }
-        };
+        let mut gtasks_object = init()
+            .await
+            .context("Failed to initialize OAuth2 authenticator")?;
 
         /* Get data from the GCalendar API and directly fill gtasks_object */
-        if let Err(e) = get_gtasks_events(&context.client, &mut gtasks_object).await {
-            error!("Failed to fetch Google Tasks during init: {:?}", e);
-        }
+        get_gtasks_events(&context.client, &mut gtasks_object)
+            .await
+            .context("Failed to fetch Google Tasks during init")?;
 
         /* Return GTasksData struct */
-        gtasks_object
+        Ok(gtasks_object)
     }
 
     /* Method for drawing data to the screen */
@@ -122,17 +117,25 @@ impl GTasksState {
         * data is initialized only if config is Some(x) and enabled
         * If in the future GTasksData needs config, replace '_' with cfg
         */
+        let mut config = config.unwrap_or_default();
         let mut data = None;
         
-        if let Some(cfg) = &config {
-            if cfg.enabled {
-                data = Some(GTasksData::new(context).await);
+        if config.get_state() {
+            match GTasksData::new(context).await {
+                Ok(d) => {
+                    data = Some(d);
+                }
+                Err(e) => {
+                    error!("Failed to initialize GTasks ({e:#}). Automatically disabling state.");
+                    config.set_state(false);
+                }
+
             }
         }
 
         GTasksState {
             data,
-            config: config.unwrap_or_default(),
+            config,
         }
     }
 }
