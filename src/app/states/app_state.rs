@@ -197,5 +197,5 @@ fn select_first_state(states: &mut AppStates) -> AppStatesEnum {
         states.clock.config.set_state(true);
     }
 
-    AppStatesEnum::Clock
+    current_state
 }
