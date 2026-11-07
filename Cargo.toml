@@ -1,7 +1,9 @@
 [package]
 name = "PIxel"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+authors = ["Nans Rey <nans2502@gmail.com>"]
+license = "GPL-2.0-only"
 
 [dependencies]
 anyhow = "1.0.100"
