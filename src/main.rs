@@ -18,6 +18,8 @@ use tracing::info;
     cargo add tracing-appender
     cargo add anyhow
     cargo add toml
+    cargo add bindgen
+    cargo add cc
 */
 
 /* Constants */

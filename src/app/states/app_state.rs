@@ -1,6 +1,7 @@
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
+use crate::app::states::matrix::matrix_wrapper::*;
 use reqwest::Client;
 use std::sync::Arc;
 use std::fs;
@@ -14,6 +15,10 @@ const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
 const CONFIG_FILE_PATH: &str = "in/";
 
 const NB_STATES: u8 = 3;
+
+// ================================================================= 
+//    Matrix part                                                     |
+// ================================================================= 
 
 // ================================================================= 
 //   AppContext part                                               |
@@ -131,6 +136,9 @@ impl App {
 
         /* Get current state */
         let current_state = select_first_state(&mut states);
+
+        /* Build matrix */
+        let matrix_options = MatrixOptions::default();
 
         /* Return constructed App */
         App { 
