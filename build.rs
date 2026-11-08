@@ -1,10 +1,19 @@
+/*
+* I'm using deps/wrapper.h to gather all headers.
+* If other libraries have to be imported, only steps 1 to 3 have to be modified.
+*/
+
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
+    // Project dirs
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let matrix_dir = PathBuf::from(&manifest_dir).join("extern/rpi-rgb-led-matrix");
+    let deps_dir = PathBuf::from(&manifest_dir).join("deps/");
+
+    // Matrix library
+    let matrix_dir = deps_dir.join("rpi-rgb-led-matrix");
     let include_dir = matrix_dir.join("include");
     let lib_dir = matrix_dir.join("lib");
 
@@ -21,16 +30,20 @@ fn main() {
 
     // 2. Tell Cargo where to find the generated static library and link it
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-lib=static=rgbmatrix");
+    println!("cargo:rustc-link-lib=static=rgbmatrix"); // Link to librgbmatrix.a (lib<name>.a)
     println!("cargo:rustc-link-lib=stdc++"); // Link C++ standard library (mandatory for hzeller)
 
     // 3. Set up rerun triggers so Cargo recompiles if source files or headers change
+    let wrapper_path = deps_dir.join("wrapper.h");
+    println!("cargo:rerun-if-changed={}", wrapper_path.display());
     println!("cargo:rerun-if-changed={}", include_dir.join("led-matrix-c.h").display());
     println!("cargo:rerun-if-changed={}", lib_dir.join("Makefile").display());
 
     // 4. Generate bindings using bindgen
     let bindings = bindgen::Builder::default()
-        .header(include_dir.join("led-matrix-c.h").to_str().unwrap())
+        .header(wrapper_path.to_str().unwrap()) // wrapper.h contains all headers we want to import (only
+        // one in this case)
+        .clang_arg(format!("-I{}", include_dir.display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
