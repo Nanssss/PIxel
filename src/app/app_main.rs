@@ -7,7 +7,7 @@ pub async fn app_main() {
     loop {
         app.draw();
         app.fetch_data().await;
-        sleep(Duration::from_millis(1000)).await; // use tokio async sleep
+        sleep(Duration::from_millis(5000)).await; // use tokio async sleep
 
         app.next_state();
     }

@@ -2,6 +2,7 @@ use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
 use crate::app::states::matrix::matrix_wrapper::*;
+use crate::app::states::matrix::*;
 use reqwest::Client;
 use std::sync::Arc;
 use std::fs;
@@ -19,6 +20,17 @@ const NB_STATES: u8 = 3;
 // ================================================================= 
 //    Matrix part                                                     |
 // ================================================================= 
+// pub struct AppMatrix {
+//     pub matrix: Matrix;
+// }
+//
+// impl AppMatrix {
+//     pub fn new() -> Self {
+//         AppMatrix {
+//             matrix: 
+//         }
+//     }
+// }
 
 // ================================================================= 
 //   AppContext part                                               |
@@ -111,6 +123,7 @@ pub struct App {
     context:        AppContext,
     states:         AppStates,
     current_state:  AppStatesEnum,
+    matrix:         AppMatrix,
 }
 
 /* App methods implementation */
@@ -138,22 +151,23 @@ impl App {
         let current_state = select_first_state(&mut states);
 
         /* Build matrix */
-        let matrix_options = MatrixOptions::default();
+        let matrix = AppMatrix::new();
 
         /* Return constructed App */
         App { 
             context,
             states,
             current_state,
+            matrix,
         }
     }
 
     /* Call draw() method of corresponding state */
-    pub fn draw(&self) {
+    pub fn draw(&mut self) {
         match &self.current_state {
-            AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(),
-            AppStatesEnum::Weather  => self.states.weather.data.as_ref().unwrap().draw(),
-            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().unwrap().draw(),
+            AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(&mut self.matrix),
+            AppStatesEnum::Weather  => self.states.weather.data.as_ref().unwrap().draw(&mut self.matrix),
+            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().unwrap().draw(&mut self.matrix),
         }
     }
 

@@ -2,6 +2,8 @@ use chrono::Local;
 use tracing::info;
 use serde::Deserialize;
 
+use crate::app::states::matrix::{matrix_wrapper::Color, *};
+
 /* Public struct containing clock config */
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClockConfig {
@@ -57,8 +59,10 @@ impl ClockData {
     }
 
     /* Method fro drawing data to the screen */
-    pub fn draw(&self) {
+    pub fn draw(&self, matrix: &mut AppMatrix) {
         info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
+        let color = Color { r: 255, g: 0, b: 0 };
+        matrix.fill(color);
     }
 
     /* Method for fetching data */
