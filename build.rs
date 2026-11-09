@@ -27,6 +27,7 @@ fn main() {
         // remove LTO optim because it requires all code to be compiled with same compiler
         // another fix would be to use clang for compiling the C++ code
         .arg("LTO_FLAGS=") 
+        .arg("MARCH=armv6")
         .status()
         .expect("Failed to execute 'make' for rgbmatrix library");
 
