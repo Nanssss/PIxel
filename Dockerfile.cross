@@ -1,0 +1,6 @@
+FROM ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:edge
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libclang-dev && \
+    rm -rf /var/lib/apt/lists/*
