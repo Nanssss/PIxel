@@ -27,8 +27,8 @@ fn main() {
     // machine code rather than GCC LTO bytecode (which rust-lld cannot read).
     let status = Command::new("make")
         .arg("-C")
-        .arg(&lib_dir)
-        .arg("librgbmatrix.a")
+        .arg(&matrix_dir)
+        .arg("lib/librgbmatrix.a")
         .arg("LTO_FLAGS=")
         .arg(format!("CC={cc}"))
         .arg(format!("CXX={cxx}"))
