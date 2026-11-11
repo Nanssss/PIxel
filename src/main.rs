@@ -3,7 +3,8 @@ use app::app_main;
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::{EnvFilter, LevelFilter}};
 use tracing_appender::{rolling, non_blocking::WorkerGuard};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, LazyLock};
+use std::path::PathBuf;
 use tracing::info;
 
 /* Notes:
@@ -26,6 +27,13 @@ use tracing::info;
 const APP_NAME:&str = "PIxel";
 const LOG_DIR:&str = "./logs";
 static FILE_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
+pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    std::env::current_exe()
+        .expect("Failed to get current executable path")
+        .parent()
+        .expect("Executable has no parent directory")
+        .to_path_buf()
+});
 
 // ================================================================= 
 //    main function                                                |

@@ -1,7 +1,7 @@
+use crate::EXECUTABLE_DIR;
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
-use crate::app::states::matrix::matrix_wrapper::*;
 use crate::app::states::matrix::*;
 use reqwest::Client;
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use serde::Deserialize;
 const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
 
 /* Config file path */
-const CONFIG_FILE_PATH: &str = "in/";
+const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
 
@@ -66,15 +66,15 @@ pub struct AppConfig {
 impl AppConfig {
     /* Loads the config from the config.toml file */
     pub fn load() -> Option<Self> {
-        let file_path = format!("{}config.toml", CONFIG_FILE_PATH);
+        let config_file_path = EXECUTABLE_DIR.join(CONFIG_FILE_PATH);
 
-        let content = fs::read_to_string(&file_path).inspect_err(|e| {
-            warn!("Error while reading {file_path}:\n{e}");
+        let content = fs::read_to_string(&config_file_path).inspect_err(|e| {
+            warn!("Error while reading {:?}:\n{e}", config_file_path);
         }).ok()?;
 
         let config: AppConfig= toml::from_str(&content).inspect_err(|e| {
-            warn!("failed to deserialize {file_path}:\n{e}");
-        }).ok()?;   
+            warn!("failed to deserialize {:?}:\n{e}", config_file_path);
+        }).ok()?;
 
         Some(config)
     }

@@ -21,7 +21,7 @@ target:
 deploy: target
 	@echo "==> Deploying binary to $(TARGET_HOST):$(TARGET_DIR)..."
 	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)"
-	scp target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
+	scp -r in/ target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
 	@echo "==> Deployment complete!"
 
 # Run the binary on the remote Pi (runs in the background using nohup)
