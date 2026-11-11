@@ -3,7 +3,8 @@ use app::app_main;
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::{EnvFilter, LevelFilter}};
 use tracing_appender::{rolling, non_blocking::WorkerGuard};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, LazyLock};
+use std::path::PathBuf;
 use tracing::info;
 
 /* Notes:
@@ -18,12 +19,21 @@ use tracing::info;
     cargo add tracing-appender
     cargo add anyhow
     cargo add toml
+    cargo add bindgen
+    cargo add cc
 */
 
 /* Constants */
 const APP_NAME:&str = "PIxel";
-const LOG_DIR:&str = "./log";
+const LOG_DIR:&str = "./logs";
 static FILE_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
+pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    std::env::current_exe()
+        .expect("Failed to get current executable path")
+        .parent()
+        .expect("Executable has no parent directory")
+        .to_path_buf()
+});
 
 // ================================================================= 
 //    main function                                                |
@@ -45,7 +55,13 @@ async fn main() {
 /* Function that initializes tracing subscriber for logging */
 fn init_logging() {
     /* 1. Create a rotating file appender (daily or hourly) */
-    let file_appender = rolling::daily(LOG_DIR, APP_NAME);
+    let file_appender = rolling::RollingFileAppender::builder()
+        .rotation(rolling::Rotation::DAILY)
+        .filename_prefix(APP_NAME)
+        .filename_suffix("log")
+        .build(LOG_DIR)
+        .expect("Failed to initialize rolling file appender");
+
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     // NOTE: keep `guard` in a global/static to ensure logs flush on exit
     FILE_GUARD.set(guard).expect("Failed to set FILE_GUARD");

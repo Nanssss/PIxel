@@ -1,3 +1,5 @@
+use crate::EXECUTABLE_DIR;
+use crate::app::matrix::matrix::*;
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
@@ -11,7 +13,7 @@ use serde::Deserialize;
 const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
 
 /* Config file path */
-const CONFIG_FILE_PATH: &str = "in/";
+const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
 
@@ -49,15 +51,15 @@ pub struct AppConfig {
 impl AppConfig {
     /* Loads the config from the config.toml file */
     pub fn load() -> Option<Self> {
-        let file_path = format!("{}config.toml", CONFIG_FILE_PATH);
+        let config_file_path = EXECUTABLE_DIR.join(CONFIG_FILE_PATH);
 
-        let content = fs::read_to_string(&file_path).inspect_err(|e| {
-            warn!("Error while reading {file_path}:\n{e}");
+        let content = fs::read_to_string(&config_file_path).inspect_err(|e| {
+            warn!("Error while reading {:?}:\n{e}", config_file_path);
         }).ok()?;
 
         let config: AppConfig= toml::from_str(&content).inspect_err(|e| {
-            warn!("failed to deserialize {file_path}:\n{e}");
-        }).ok()?;   
+            warn!("failed to deserialize {:?}:\n{e}", config_file_path);
+        }).ok()?;
 
         Some(config)
     }
@@ -106,6 +108,7 @@ pub struct App {
     context:        AppContext,
     states:         AppStates,
     current_state:  AppStatesEnum,
+    matrix:         Matrix,
 }
 
 /* App methods implementation */
@@ -132,20 +135,24 @@ impl App {
         /* Get current state */
         let current_state = select_first_state(&mut states);
 
+        /* Build matrix */
+        let matrix = Matrix::new();
+
         /* Return constructed App */
         App { 
             context,
             states,
             current_state,
+            matrix,
         }
     }
 
     /* Call draw() method of corresponding state */
-    pub fn draw(&self) {
+    pub fn draw(&mut self) {
         match &self.current_state {
-            AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(),
-            AppStatesEnum::Weather  => self.states.weather.data.as_ref().unwrap().draw(),
-            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().unwrap().draw(),
+            AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(&mut self.matrix),
+            AppStatesEnum::Weather  => self.states.weather.data.as_ref().unwrap().draw(&mut self.matrix),
+            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().unwrap().draw(&mut self.matrix),
         }
     }
 
