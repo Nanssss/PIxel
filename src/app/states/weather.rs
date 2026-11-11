@@ -1,8 +1,8 @@
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
-use crate::app::states::{app_state::AppContext, matrix::matrix_wrapper::Color};
-use crate::app::states::matrix::*;
+use crate::app::states::{app_state::AppContext};
+use crate::app::matrix::matrix::*;
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
 
@@ -89,7 +89,7 @@ impl WeatherData {
     }
 
     /* Method for drawing data to the screen */
-    pub fn draw(&self, matrix: &mut AppMatrix) {
+    pub fn draw(&self, matrix: &mut Matrix) {
         info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
             self.weather_summary, self.temp_max, self.temp_min, self.precipitation_sum);
         let color = Color { r: 0, g: 255, b: 0 };

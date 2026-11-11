@@ -1,7 +1,6 @@
 use crate::app::states::app_state::AppContext;
 use crate::app::dep::oauth2::*;
-use crate::app::states::matrix::matrix_wrapper::Color;
-use crate::app::states::matrix::*;
+use crate::app::matrix::matrix::*;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::{Deserialize, Deserializer};
@@ -89,7 +88,7 @@ impl GTasksData {
     }
 
     /* Method for drawing data to the screen */
-    pub fn draw(&self, matrix: &mut AppMatrix) {
+    pub fn draw(&self, matrix: &mut Matrix) {
         /* Print number of tasks */
         info!("[GOOGLE TASKS] - Found {} Tasks", self.nb);
 

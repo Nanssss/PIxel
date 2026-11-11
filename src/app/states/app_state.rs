@@ -1,8 +1,8 @@
 use crate::EXECUTABLE_DIR;
+use crate::app::matrix::matrix::*;
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
-use crate::app::states::matrix::*;
 use reqwest::Client;
 use std::sync::Arc;
 use std::fs;
@@ -16,21 +16,6 @@ const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
-
-// ================================================================= 
-//    Matrix part                                                     |
-// ================================================================= 
-// pub struct AppMatrix {
-//     pub matrix: Matrix;
-// }
-//
-// impl AppMatrix {
-//     pub fn new() -> Self {
-//         AppMatrix {
-//             matrix: 
-//         }
-//     }
-// }
 
 // ================================================================= 
 //   AppContext part                                               |
@@ -123,7 +108,7 @@ pub struct App {
     context:        AppContext,
     states:         AppStates,
     current_state:  AppStatesEnum,
-    matrix:         AppMatrix,
+    matrix:         Matrix,
 }
 
 /* App methods implementation */
@@ -151,7 +136,7 @@ impl App {
         let current_state = select_first_state(&mut states);
 
         /* Build matrix */
-        let matrix = AppMatrix::new();
+        let matrix = Matrix::new();
 
         /* Return constructed App */
         App { 

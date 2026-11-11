@@ -5,13 +5,10 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::ffi::{CString, CStr};
-use std::os::raw::c_char;
-use std::ptr;
-
+use std::ffi::{CString};
 
 // ============================================================================
-// 2. SAFE, IDIOMATIC RUST ABSTRACTIONS
+// SAFE, IDIOMATIC RUST ABSTRACTIONS TO THE C LIBRARY
 // ============================================================================
 
 /// Configuration builder for the LED Matrix.
@@ -132,7 +129,7 @@ unsafe impl Send for Matrix {}
 
 impl Matrix {
     /// Initializes the RGB matrix with user options. Requires root privileges on the Pi.
-    pub fn new(options: MatrixOptions) -> Result<Self, &'static str> {
+    fn init(options: MatrixOptions) -> Result<Self, &'static str> {
         unsafe {
             // 1. Zero-initialize options structs
             let mut opts: RGBLedMatrixOptions = std::mem::zeroed();
@@ -214,5 +211,28 @@ impl Drop for Matrix {
                 led_matrix_delete(self.ptr);
             }
         }
+    }
+}
+
+// ============================================================================
+// HIGHER LEVEL FUNCTIONS
+// ============================================================================
+impl Matrix {
+    pub fn new() -> Self {
+        let options = MatrixOptions {
+            rows: 32,
+            cols: 64,
+            brightness: 100,
+            hardware_mapping: Some("adafruit-hat".to_string()),
+            ..Default::default()
+        };
+
+        self::Matrix::init(options).unwrap()
+    }
+
+    pub fn fill(&mut self, color: Color) {
+        let mut canvas = self.create_offscreen_canvas();
+        canvas.fill(color);
+        self.swap_on_vsync(canvas);
     }
 }
