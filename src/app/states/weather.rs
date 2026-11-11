@@ -1,13 +1,14 @@
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
-use std::fs;
 use crate::app::states::{app_state::AppContext, matrix::matrix_wrapper::Color};
 use crate::app::states::matrix::*;
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
+// Include the file in the final executable
+const WMO_CODES_JSON: &str = include_str!("./res/wmo_codes.json");
 
 /* Public struct containing weather config */
 #[derive(Debug, Clone, Deserialize)]
@@ -239,12 +240,8 @@ where
 
 /* Function used to translate weather WMO code to weather String using json code file */
 fn code_to_weather(code: i32) -> Result<String> {
-    /* Open json file as String */
-    let wmo_code_file = fs::read_to_string("./src/app/states/res/wmo_codes.json")
-        .context("failed to read weather code JSON file")?;
-
     /* Convert String as json Value */
-    let wmo_code_json: serde_json::Value = serde_json::from_str(&wmo_code_file)
+    let wmo_code_json: serde_json::Value = serde_json::from_str(WMO_CODES_JSON)
         .context("failed to parse weather code JSON")?;
 
     /* Get description field ("entry": "day": "description": "xx") */
