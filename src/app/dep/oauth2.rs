@@ -2,8 +2,10 @@ use yup_oauth2::{InstalledFlowAuthenticator, authenticator::Authenticator, Insta
 use yup_oauth2::hyper_rustls::HttpsConnector;
 use tracing::{trace};
 use anyhow::{Result, Context};
+use crate::EXECUTABLE_DIR;
 
-const RES_FOLDER_PATH: &str = "in/";
+const CREDENTIALS_FILE: &str = "in/credentials.json";
+const TOKEN_FILE: &str = "in/tokencache.json";
 
 pub struct OAuth2Data {
     pub authenticator: Option<Authenticator<HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>>>,
@@ -19,7 +21,7 @@ impl Default for OAuth2Data {
 
 pub async fn oauth2_get_google_authenticator() -> Result<OAuth2Data> {
     /* Read application secret from a file, you can generate this file from the Google Cloud console: https://console.cloud.google.com/ */
-    let secret_path = format!("{}credentials.json", RES_FOLDER_PATH);
+    let secret_path = EXECUTABLE_DIR.join(CREDENTIALS_FILE);
     let secret = yup_oauth2::read_application_secret(&secret_path)
         .await
         .context("failed to read application secret")?;
@@ -28,7 +30,7 @@ pub async fn oauth2_get_google_authenticator() -> Result<OAuth2Data> {
     authentication tokens are persisted to a file named tokencache.json. The
     authenticator takes care of caching tokens to disk and refreshing tokens once
     they've expired. */
-    let token_cache_path = format!("{}tokencache.json", RES_FOLDER_PATH);
+    let token_cache_path = EXECUTABLE_DIR.join(TOKEN_FILE);
     let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
         .persist_tokens_to_disk(token_cache_path)
         .build()

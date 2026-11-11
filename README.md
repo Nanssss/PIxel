@@ -21,3 +21,11 @@ Then, when your ids are created, download them and put them in `in/credentials.j
 
 Edit `in/config.toml` config as you want. Here, you can enable/disable features.
 
+# License
+
+This project is an open-source software licensed under the **GNU General Public License v2.0**. 
+
+It is designed to interface with the [hzeller/rpi-rgb-led-matrix](https://github.com/hzeller/rpi-rgb-led-matrix) library, which is also licensed under the GNU GPL v2.0. 
+
+See the [LICENSE](LICENSE) file for the full text.
+
