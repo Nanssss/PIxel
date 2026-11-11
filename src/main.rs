@@ -24,7 +24,7 @@ use tracing::info;
 
 /* Constants */
 const APP_NAME:&str = "PIxel";
-const LOG_DIR:&str = "./log";
+const LOG_DIR:&str = "./logs";
 static FILE_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 
 // ================================================================= 
@@ -47,7 +47,13 @@ async fn main() {
 /* Function that initializes tracing subscriber for logging */
 fn init_logging() {
     /* 1. Create a rotating file appender (daily or hourly) */
-    let file_appender = rolling::daily(LOG_DIR, APP_NAME);
+    let file_appender = rolling::RollingFileAppender::builder()
+        .rotation(rolling::Rotation::DAILY)
+        .filename_prefix(APP_NAME)
+        .filename_suffix("log")
+        .build(LOG_DIR)
+        .expect("Failed to initialize rolling file appender");
+
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     // NOTE: keep `guard` in a global/static to ensure logs flush on exit
     FILE_GUARD.set(guard).expect("Failed to set FILE_GUARD");
