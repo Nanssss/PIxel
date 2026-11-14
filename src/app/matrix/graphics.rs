@@ -14,7 +14,7 @@
 
 use core::convert::Infallible;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
-use super::matrix::{Canvas, Color, Matrix};
+use super::{Canvas, Color, Matrix};
 
 /// Converts an `embedded-graphics` color into the C library `Color` struct.
 ///

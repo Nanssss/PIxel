@@ -1,5 +1,5 @@
 use crate::EXECUTABLE_DIR;
-use crate::app::matrix::matrix::*;
+use crate::app::matrix::Matrix;
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;

@@ -2,7 +2,7 @@ use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
 use crate::app::states::{app_state::AppContext};
-use crate::app::matrix::matrix::*;
+use crate::app::matrix::{Color, Matrix};
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
 

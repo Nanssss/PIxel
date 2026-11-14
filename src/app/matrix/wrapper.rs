@@ -1,15 +1,13 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
+//! Safe, idiomatic Rust abstractions over the C library (1:1 with the C API).
+//!
+//! All `unsafe` code of the project lives here. C items are always written with
+//! their `ffi::` prefix: every crossing into C is visible at a glance.
+
+// The wrapper exposes the full C API, even the parts the app doesn't use yet.
 #![allow(dead_code)]
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
-use std::ffi::{CString};
-
-// ============================================================================
-// SAFE, IDIOMATIC RUST ABSTRACTIONS TO THE C LIBRARY
-// ============================================================================
+use super::ffi::{self, Color};
+use std::ffi::CString;
 
 /// Configuration builder for the LED Matrix.
 #[derive(Debug, Clone)]
@@ -43,23 +41,23 @@ impl Default for MatrixOptions {
 
 /// A handle to a drawing surface (either active display or offscreen buffer).
 pub struct Canvas {
-    ptr: *mut LedCanvas,
+    ptr: *mut ffi::LedCanvas,
 }
 
 impl Canvas {
     /// Clears the canvas (turns all pixels black).
     pub fn clear(&mut self) {
-        unsafe { led_canvas_clear(self.ptr) }
+        unsafe { ffi::led_canvas_clear(self.ptr) }
     }
 
     /// Fills the entire canvas with a solid RGB color.
     pub fn fill(&mut self, color: Color) {
-        unsafe { led_canvas_fill(self.ptr, color.r, color.g, color.b) }
+        unsafe { ffi::led_canvas_fill(self.ptr, color.r, color.g, color.b) }
     }
 
     /// Sets an individual pixel's color.
     pub fn set_pixel(&mut self, x: i32, y: i32, color: Color) {
-        unsafe { led_canvas_set_pixel(self.ptr, x, y, color.r, color.g, color.b) }
+        unsafe { ffi::led_canvas_set_pixel(self.ptr, x, y, color.r, color.g, color.b) }
     }
 
     /// Returns the (width, height) dimensions of the canvas in pixels.
@@ -67,7 +65,7 @@ impl Canvas {
         let mut width = 0;
         let mut height = 0;
         unsafe {
-            led_canvas_get_size(self.ptr, &mut width, &mut height);
+            ffi::led_canvas_get_size(self.ptr, &mut width, &mut height);
         }
         (width, height)
     }
@@ -76,7 +74,7 @@ impl Canvas {
     pub fn draw_text(&mut self, font: &Font, x: i32, y: i32, color: Color, text: &str) -> Result<i32, String> {
         let c_text = CString::new(text).map_err(|e| format!("Invalid text for C string: {}", e))?;
         let res = unsafe {
-            draw_text(
+            ffi::draw_text(
                 self.ptr,
                 font.ptr,
                 x,
@@ -94,14 +92,14 @@ impl Canvas {
 
 /// A loaded BDF font wrapper.
 pub struct Font {
-    ptr: *mut LedFont,
+    ptr: *mut ffi::LedFont,
 }
 
 impl Font {
     /// Loads a BDF font from the specified file path.
     pub fn load(path: &str) -> Result<Self, String> {
         let c_path = CString::new(path).map_err(|e| format!("Invalid font path: {}", e))?;
-        let ptr = unsafe { load_font(c_path.as_ptr()) };
+        let ptr = unsafe { ffi::load_font(c_path.as_ptr()) };
         if ptr.is_null() {
             return Err(format!("Failed to load font from: {}", path));
         }
@@ -113,7 +111,7 @@ impl Drop for Font {
     fn drop(&mut self) {
         unsafe {
             if !self.ptr.is_null() {
-                delete_font(self.ptr);
+                ffi::delete_font(self.ptr);
             }
         }
     }
@@ -121,9 +119,10 @@ impl Drop for Font {
 
 /// The main LED Matrix controller managing hardware resources and threads.
 pub struct Matrix {
-    ptr: *mut RGBLedMatrix,
+    ptr: *mut ffi::RGBLedMatrix,
     /// Hidden buffer we draw on before displaying it (double buffering).
-    /// `pub(super)`: visible to `graphics.rs` (same parent module).
+    /// `pub(super)`: visible to the sibling modules under `matrix`
+    /// (`graphics.rs`, `high_level.rs`), but not to the rest of the app.
     pub(super) offscreen: Canvas,
 }
 
@@ -132,11 +131,13 @@ unsafe impl Send for Matrix {}
 
 impl Matrix {
     /// Initializes the RGB matrix with user options. Requires root privileges on the Pi.
-    fn init(options: MatrixOptions) -> Result<Self, &'static str> {
+    ///
+    /// `pub(super)`: the app goes through `Matrix::new` (see `high_level.rs`).
+    pub(super) fn init(options: MatrixOptions) -> Result<Self, &'static str> {
         unsafe {
             // 1. Zero-initialize options structs
-            let mut opts: RGBLedMatrixOptions = std::mem::zeroed();
-            let mut rt_opts: RGBLedRuntimeOptions = std::mem::zeroed();
+            let mut opts: ffi::RGBLedMatrixOptions = std::mem::zeroed();
+            let mut rt_opts: ffi::RGBLedRuntimeOptions = std::mem::zeroed();
 
             // Populate standard options
             opts.rows = options.rows;
@@ -166,13 +167,13 @@ impl Matrix {
             rt_opts.drop_privileges = 1;  // Drop root privileges after init
 
             // 2. Instantiate matrix via C library
-            let matrix_ptr = led_matrix_create_from_options_and_rt_options(&mut opts, &mut rt_opts);
+            let matrix_ptr = ffi::led_matrix_create_from_options_and_rt_options(&mut opts, &mut rt_opts);
             if matrix_ptr.is_null() {
                 return Err("Failed to create RGB LED Matrix. Ensure you are running with root privileges.");
             }
 
             // 3. Create the single offscreen canvas used for double buffering.
-            let offscreen = Canvas { ptr: led_matrix_create_offscreen_canvas(matrix_ptr) };
+            let offscreen = Canvas { ptr: ffi::led_matrix_create_offscreen_canvas(matrix_ptr) };
 
             Ok(Self { ptr: matrix_ptr, offscreen })
         }
@@ -180,7 +181,7 @@ impl Matrix {
 
     /// Returns a canvas handle for direct immediate drawing.
     pub fn canvas(&mut self) -> Canvas {
-        let canvas_ptr = unsafe { led_matrix_get_canvas(self.ptr) };
+        let canvas_ptr = unsafe { ffi::led_matrix_get_canvas(self.ptr) };
         Canvas { ptr: canvas_ptr }
     }
 
@@ -191,7 +192,7 @@ impl Matrix {
     /// freed when the matrix is deleted: calling it on every frame leaks memory.
     #[deprecated(note = "allocates a new framebuffer on each call (memory leak), draw on the matrix and use `show` instead")]
     fn create_offscreen_canvas(&mut self) -> Canvas {
-        let canvas_ptr = unsafe { led_matrix_create_offscreen_canvas(self.ptr) };
+        let canvas_ptr = unsafe { ffi::led_matrix_create_offscreen_canvas(self.ptr) };
         Canvas { ptr: canvas_ptr }
     }
 
@@ -203,35 +204,27 @@ impl Matrix {
     /// the swap itself on the canvas owned by the matrix.
     #[deprecated(note = "use `show` instead, which swaps the canvas owned by the matrix")]
     fn swap_on_vsync(&mut self, mut offscreen: Canvas) -> Canvas {
-        let new_offscreen_ptr = unsafe { led_matrix_swap_on_vsync(self.ptr, offscreen.ptr) };
+        let new_offscreen_ptr = unsafe { ffi::led_matrix_swap_on_vsync(self.ptr, offscreen.ptr) };
         offscreen.ptr = new_offscreen_ptr;
         offscreen
     }
 
-    /// Displays everything drawn on the matrix since the last call, on the next vertical sync.
+    /// Swaps the hidden buffer (`offscreen`) with the displayed one, on the next vertical sync.
+    /// Afterwards, `offscreen` holds the previously displayed buffer, content untouched.
     ///
-    /// Drawing goes to a hidden buffer (double buffering, no flickering). The swap gives
-    /// back the previously displayed buffer, which is cleared and becomes the next hidden
-    /// one, so each frame starts from a black screen. Only two buffers ever exist:
-    ///
-    /// ```text
-    ///          frame 1          frame 2          frame 3
-    /// shown:   [A]    swap ->   [B]    swap ->   [A]
-    /// hidden:  [B] <- draw      [A] <- draw      [B] <- draw
-    /// ```
-    pub fn show(&mut self) {
-        self.offscreen.ptr = unsafe { led_matrix_swap_on_vsync(self.ptr, self.offscreen.ptr) };
-        self.offscreen.clear();
+    /// `pub(super)`: the app uses [`Matrix::show`] (see `high_level.rs`).
+    pub(super) fn swap_offscreen(&mut self) {
+        self.offscreen.ptr = unsafe { ffi::led_matrix_swap_on_vsync(self.ptr, self.offscreen.ptr) };
     }
 
     /// Gets current brightness (1..100).
     pub fn brightness(&self) -> u8 {
-        unsafe { led_matrix_get_brightness(self.ptr) }
+        unsafe { ffi::led_matrix_get_brightness(self.ptr) }
     }
 
     /// Sets panel brightness (1..100).
     pub fn set_brightness(&mut self, brightness: u8) {
-        unsafe { led_matrix_set_brightness(self.ptr, brightness) }
+        unsafe { ffi::led_matrix_set_brightness(self.ptr, brightness) }
     }
 }
 
@@ -240,30 +233,8 @@ impl Drop for Matrix {
     fn drop(&mut self) {
         unsafe {
             if !self.ptr.is_null() {
-                led_matrix_delete(self.ptr);
+                ffi::led_matrix_delete(self.ptr);
             }
         }
-    }
-}
-
-// ============================================================================
-// HIGHER LEVEL FUNCTIONS
-// ============================================================================
-impl Matrix {
-    pub fn new() -> Self {
-        let options = MatrixOptions {
-            rows: 32,
-            cols: 64,
-            brightness: 100,
-            hardware_mapping: Some("adafruit-hat".to_string()),
-            ..Default::default()
-        };
-
-        self::Matrix::init(options).unwrap()
-    }
-
-    /// Fills the whole panel with a single solid color (visible after `show`).
-    pub fn fill(&mut self, color: Color) {
-        self.offscreen.fill(color);
     }
 }

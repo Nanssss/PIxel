@@ -1,6 +1,6 @@
 use crate::app::states::app_state::AppContext;
 use crate::app::dep::oauth2::*;
-use crate::app::matrix::matrix::*;
+use crate::app::matrix::{Color, Matrix};
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
