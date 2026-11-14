@@ -23,12 +23,31 @@ fn main() {
     let target = env::var("TARGET").unwrap_or_default();
     let is_armv6 = target.contains("arm-unknown-linux-gnueabihf") || target.contains("armv6");
 
+    // Build the C++ library out of tree, in OUT_DIR. OUT_DIR is different for each
+    // target (host for rust-analyzer, ARM for cross), so the two builds never
+    // overwrite each other's object files. The submodule sources are only read.
+    let build_dir = PathBuf::from(env::var("OUT_DIR").unwrap()).join("rgbmatrix");
+    // The compiler doesn't create directories: rp1/*.o objects need rp1/ to exist
+    std::fs::create_dir_all(build_dir.join("rp1")).expect("Failed to create rgbmatrix build dir");
+
     // Compile the C++ library. LTO is disabled so the static lib contains native
     // machine code rather than GCC LTO bytecode (which rust-lld cannot read).
     let status = Command::new("make")
-        .arg("-C")
-        .arg(&matrix_dir)
-        .arg("lib/librgbmatrix.a")
+        .arg("-C") // run in the build dir: objects and librgbmatrix.a are written there
+        .arg(&build_dir)
+        .arg("-f") // ...but use the library's own Makefile
+        .arg(lib_dir.join("Makefile"))
+        .arg("-I") // where `include ../config.mk` is resolved from
+        .arg(&lib_dir)
+        // where to find the sources and headers (only those: a plain VPATH would also
+        // pick up stale .o files left by an in-place build of the submodule)
+        .arg(format!("--eval=vpath %.cc {}", lib_dir.display()))
+        .arg(format!("--eval=vpath %.c {}", lib_dir.display()))
+        .arg(format!("--eval=vpath %.h {}", lib_dir.display()))
+        // paths the Makefile defines relative to lib/, made absolute
+        .arg(format!("INCDIR={}", include_dir.display()))
+        .arg(format!("RP1_PIO_VENDOR_DIR={}", lib_dir.join("rp1/rp1_pio_vendor").display()))
+        .arg("librgbmatrix.a")
         .arg("LTO_FLAGS=")
         .arg(format!("CC={cc}"))
         .arg(format!("CXX={cxx}"))
@@ -38,7 +57,7 @@ fn main() {
     assert!(status.success(), "rgbmatrix make failed");
 
     // Tell Cargo where to find the generated static library and link it
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+    println!("cargo:rustc-link-search=native={}", build_dir.display());
     println!("cargo:rustc-link-lib=static=rgbmatrix"); // Link to librgbmatrix.a (lib<name>.a)
     println!("cargo:rustc-link-lib=stdc++"); // Link C++ standard library (mandatory for hzeller)
 
