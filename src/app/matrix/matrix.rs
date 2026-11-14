@@ -122,6 +122,9 @@ impl Drop for Font {
 /// The main LED Matrix controller managing hardware resources and threads.
 pub struct Matrix {
     ptr: *mut RGBLedMatrix,
+    /// Hidden buffer we draw on before displaying it (double buffering).
+    /// `pub(super)`: visible to `graphics.rs` (same parent module).
+    pub(super) offscreen: Canvas,
 }
 
 // Safety: The underlying C++ library handles thread synchronization for its display loop.
@@ -168,7 +171,10 @@ impl Matrix {
                 return Err("Failed to create RGB LED Matrix. Ensure you are running with root privileges.");
             }
 
-            Ok(Self { ptr: matrix_ptr })
+            // 3. Create the single offscreen canvas used for double buffering.
+            let offscreen = Canvas { ptr: led_matrix_create_offscreen_canvas(matrix_ptr) };
+
+            Ok(Self { ptr: matrix_ptr, offscreen })
         }
     }
 
@@ -178,18 +184,44 @@ impl Matrix {
         Canvas { ptr: canvas_ptr }
     }
 
-    /// Creates an offscreen canvas for flicker-free double buffering.
-    pub fn create_offscreen_canvas(&mut self) -> Canvas {
+    /// Creates a new offscreen canvas for double buffering.
+    ///
+    /// **Do not use, kept for reference only: draw on the matrix, then call [`Matrix::show`].**
+    /// Each call makes the C library allocate a new framebuffer, which is only
+    /// freed when the matrix is deleted: calling it on every frame leaks memory.
+    #[deprecated(note = "allocates a new framebuffer on each call (memory leak), draw on the matrix and use `show` instead")]
+    fn create_offscreen_canvas(&mut self) -> Canvas {
         let canvas_ptr = unsafe { led_matrix_create_offscreen_canvas(self.ptr) };
         Canvas { ptr: canvas_ptr }
     }
 
     /// Swaps the offscreen buffer with the active display on vertical sync.
     /// Returns the old active canvas to be reused as the next offscreen buffer.
-    pub fn swap_on_vsync(&mut self, mut offscreen: Canvas) -> Canvas {
+    ///
+    /// **Do not use, kept for reference only: use [`Matrix::show`] instead.**
+    /// It only made sense with `create_offscreen_canvas`; `show` now does
+    /// the swap itself on the canvas owned by the matrix.
+    #[deprecated(note = "use `show` instead, which swaps the canvas owned by the matrix")]
+    fn swap_on_vsync(&mut self, mut offscreen: Canvas) -> Canvas {
         let new_offscreen_ptr = unsafe { led_matrix_swap_on_vsync(self.ptr, offscreen.ptr) };
         offscreen.ptr = new_offscreen_ptr;
         offscreen
+    }
+
+    /// Displays everything drawn on the matrix since the last call, on the next vertical sync.
+    ///
+    /// Drawing goes to a hidden buffer (double buffering, no flickering). The swap gives
+    /// back the previously displayed buffer, which is cleared and becomes the next hidden
+    /// one, so each frame starts from a black screen. Only two buffers ever exist:
+    ///
+    /// ```text
+    ///          frame 1          frame 2          frame 3
+    /// shown:   [A]    swap ->   [B]    swap ->   [A]
+    /// hidden:  [B] <- draw      [A] <- draw      [B] <- draw
+    /// ```
+    pub fn show(&mut self) {
+        self.offscreen.ptr = unsafe { led_matrix_swap_on_vsync(self.ptr, self.offscreen.ptr) };
+        self.offscreen.clear();
     }
 
     /// Gets current brightness (1..100).
@@ -230,9 +262,8 @@ impl Matrix {
         self::Matrix::init(options).unwrap()
     }
 
+    /// Fills the whole panel with a single solid color (visible after `show`).
     pub fn fill(&mut self, color: Color) {
-        let mut canvas = self.create_offscreen_canvas();
-        canvas.fill(color);
-        self.swap_on_vsync(canvas);
+        self.offscreen.fill(color);
     }
 }

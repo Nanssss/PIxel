@@ -154,6 +154,9 @@ impl App {
             AppStatesEnum::Weather  => self.states.weather.data.as_ref().unwrap().draw(&mut self.matrix),
             AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().unwrap().draw(&mut self.matrix),
         }
+
+        /* Display the frame the state just drew */
+        self.matrix.show();
     }
 
     /* Call fetch_data() method of corresponding state */

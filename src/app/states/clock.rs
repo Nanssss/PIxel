@@ -7,8 +7,19 @@ use embedded_graphics::{
     pixelcolor::Rgb888,
     prelude::*,
     primitives::PrimitiveStyle,
-    text::{Alignment, Baseline, Text, TextStyleBuilder},
+    text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
 };
+
+/* Drawing styles, built once at compile time */
+/// 1px red outline used for the panel border
+const BORDER_STYLE: PrimitiveStyle<Rgb888> = PrimitiveStyle::with_stroke(Rgb888::RED, 1);
+/// White 6x10 mono font for the time (font + color)
+const TIME_FONT: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_6X10, Rgb888::WHITE);
+/// Text centered horizontally and vertically on its anchor point
+const CENTERED: TextStyle = TextStyleBuilder::new()
+    .alignment(Alignment::Center)
+    .baseline(Baseline::Middle)
+    .build();
 
 /* Public struct containing clock config */
 #[derive(Debug, Clone, Deserialize)]
@@ -68,29 +79,14 @@ impl ClockData {
     pub fn draw(&self, matrix: &mut Matrix) {
         info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
 
-        /* Draw on an offscreen canvas, then swap it to avoid flickering */
-        // TODO: a new offscreen canvas is allocated on each draw (memory leak), reuse one instead
-        let mut canvas = matrix.create_offscreen_canvas();
-        canvas.clear();
+        let screen = matrix.bounding_box();
 
+        // Drawing on the matrix can't fail (Error = Infallible): `Ok` is the only possible case
         /* 1px red border around the whole panel */
-        // Drawing on a Canvas can't fail (Error = Infallible), so the Result is ignored
-        let _ = canvas
-            .bounding_box()
-            .into_styled(PrimitiveStyle::with_stroke(Rgb888::RED, 1))
-            .draw(&mut canvas);
+        let Ok(_) = screen.into_styled(BORDER_STYLE).draw(matrix);
 
-        /* Time centered on the panel, with a built-in 6x10 mono font */
-        // Character style = font + color, text style = position of the text around its anchor point
-        let character_style = MonoTextStyle::new(&FONT_6X10, Rgb888::WHITE);
-        let text_style = TextStyleBuilder::new()
-            .alignment(Alignment::Center) // horizontally centered on the anchor
-            .baseline(Baseline::Middle)   // vertically centered on the anchor
-            .build();
-        let _ = Text::with_text_style(&self.time, canvas.bounding_box().center(), character_style, text_style)
-            .draw(&mut canvas);
-
-        matrix.swap_on_vsync(canvas);
+        /* Time centered on the panel */
+        let Ok(_) = Text::with_text_style(&self.time, screen.center(), TIME_FONT, CENTERED).draw(matrix);
     }
 
     /* Method for fetching data */
