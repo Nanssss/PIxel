@@ -61,8 +61,12 @@ fn main() {
     println!("cargo:rustc-link-lib=static=rgbmatrix"); // Link to librgbmatrix.a (lib<name>.a)
     println!("cargo:rustc-link-lib=stdc++"); // Link C++ standard library (mandatory for hzeller)
 
-    // Tell rust-lld not to garbage-collect custom sections bounded by __start_/__stop_
-    println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
+    // Tell rust-lld (host builds) not to garbage-collect custom sections bounded by
+    // __start_/__stop_ (used by the library's RP1 code). The cross GNU ld keeps them
+    // by default, and is too old to know this option: it would only warn about it.
+    if !is_armv6 {
+        println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
+    }
 
     // Set up rerun triggers so Cargo recompiles if source files or headers change
     println!("cargo:rerun-if-changed={}", wrapper_path.display());
