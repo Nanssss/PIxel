@@ -10,6 +10,11 @@ use super::ffi::{self, Color};
 use std::ffi::CString;
 
 /// Configuration builder for the LED Matrix.
+///
+/// **`0` / `None` means "library default", not zero**: the C API only copies
+/// non-zero fields over its own defaults (`OPT_COPY_IF_SET` in `led-matrix-c.cc`).
+/// E.g. `gpio_slowdown: 0` actually runs with the library's 1 (2 on a Pi 4),
+/// and `brightness: 0` with 100.
 #[derive(Debug, Clone)]
 pub struct MatrixOptions {
     pub rows: i32,
@@ -32,9 +37,9 @@ impl Default for MatrixOptions {
             parallel: 1,
             brightness: 100,
             hardware_mapping: Some("adafruit-hat".to_string()),
-            led_rgb_sequence: None,
-            gpio_slowdown: 0,
-            rp1_pio: 0,
+            led_rgb_sequence: None, // library default: "RGB"
+            gpio_slowdown: 0,       // library default: 1 (2 on a Pi 4)
+            rp1_pio: 0,             // library default: 0 (RP1 RIO, Pi 5 only)
         }
     }
 }
@@ -126,7 +131,11 @@ pub struct Matrix {
     pub(super) offscreen: Canvas,
 }
 
-// Safety: The underlying C++ library handles thread synchronization for its display loop.
+// Safety: `Send` only allows *moving* the `Matrix` to another thread (e.g. when a
+// tokio task migrates), never using it from two threads at once: that would need
+// `Sync`, which we don't implement. The C++ matrix isn't tied to the thread that
+// created it (its refresh thread is internal), so moving the handle is fine.
+// Raw pointers are `!Send` by default, hence this explicit (unsafe) promise.
 unsafe impl Send for Matrix {}
 
 impl Matrix {
@@ -177,12 +186,6 @@ impl Matrix {
 
             Ok(Self { ptr: matrix_ptr, offscreen })
         }
-    }
-
-    /// Returns a canvas handle for direct immediate drawing.
-    pub fn canvas(&mut self) -> Canvas {
-        let canvas_ptr = unsafe { ffi::led_matrix_get_canvas(self.ptr) };
-        Canvas { ptr: canvas_ptr }
     }
 
     /// Creates a new offscreen canvas for double buffering.

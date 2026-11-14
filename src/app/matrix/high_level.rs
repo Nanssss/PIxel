@@ -7,16 +7,14 @@ use super::ffi::Color;
 use super::wrapper::{Matrix, MatrixOptions};
 
 impl Matrix {
+    /// Creates the matrix for this project's panel (32x64, Adafruit HAT), see
+    /// [`MatrixOptions::default`]. Requires root privileges on the Pi.
+    ///
+    /// # Panics
+    /// If the C library fails to create the matrix (usually: not run as root).
     pub fn new() -> Self {
-        let options = MatrixOptions {
-            rows: 32,
-            cols: 64,
-            brightness: 100,
-            hardware_mapping: Some("adafruit-hat".to_string()),
-            ..Default::default()
-        };
-
-        Self::init(options).unwrap()
+        // `expect` instead of `unwrap`: same panic, but with a helpful message.
+        Self::init(MatrixOptions::default()).expect("failed to init the LED matrix (run as root?)")
     }
 
     /// Displays everything drawn on the matrix since the last call, on the next vertical sync.

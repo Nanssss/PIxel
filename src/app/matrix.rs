@@ -13,6 +13,6 @@ mod high_level;
 mod wrapper;
 
 // Only re-export what the app uses: in a binary crate, an unused `pub use`
-// triggers a warning. Add `Font`, `MatrixOptions`... here when needed.
+// triggers a warning. Add `Canvas`, `Font`, `MatrixOptions`... here when needed.
 pub use ffi::Color;
-pub use wrapper::{Canvas, Matrix};
+pub use wrapper::Matrix;
