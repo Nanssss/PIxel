@@ -44,8 +44,8 @@ impl GTasksConfig {
 /// Public struct containing gtasks data
 #[derive(Default)] // to be able to fill with default values
 pub struct GTasksData {
-    tasks:                  Vec<GTask>,     // Vec of tasks
-    nb:                     usize,          // b of tasks in tasks
+    // `None` until the first successful fetch, `Some(vec![])` when there is no task
+    tasks:                  Option<Vec<GTask>>, // last tasks received
     request_url:            String,         // full request URL to send to Google API
     oauth2:                 OAuth2Data,     // OAuth2 authenticator data
 }
@@ -78,10 +78,10 @@ impl GTasksData {
             .await
             .context("Failed to initialize OAuth2 authenticator")?;
 
-        /* Get data from the GCalendar API and directly fill gtasks_object */
-        get_gtasks_events(&context.client, &mut gtasks_object)
-            .await
-            .context("Failed to fetch Google Tasks during init")?;
+        /* Get data from the GCalendar API. A failed fetch (e.g. no network at boot) is
+        logged by `fetch_data` and isn't fatal: the state has no data yet, so it isn't
+        displayed, and the next `fetch_data` will try again. */
+        gtasks_object.fetch_data(context).await;
 
         /* Return GTasksData struct */
         Ok(gtasks_object)
@@ -89,11 +89,14 @@ impl GTasksData {
 
     /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
+        // The app only draws states that have data, so this is just a safety net.
+        let Some(tasks) = &self.tasks else { return };
+
         /* Print number of tasks */
-        info!("[GOOGLE TASKS] - Found {} Tasks", self.nb);
+        info!("[GOOGLE TASKS] - Found {} Tasks", tasks.len());
 
         /* Print each task */
-        for task in &self.tasks {
+        for task in tasks {
             info!("[GOOGLE TASKS] - Task: {} ({})", task.title, task.date);
             
             if !task.description.is_empty() {
@@ -105,9 +108,15 @@ impl GTasksData {
         matrix.fill(color);
     }
 
+    /// Returns true once the tasks have been received (there is something to display)
+    pub fn has_data(&self) -> bool {
+        self.tasks.is_some()
+    }
+
     /// Method for fetching data from public API
     pub async fn fetch_data(&mut self, context: &AppContext) {
-        /* Get data from the GCalendar API and directly fill self */
+        /* Get data from the GCalendar API and directly fill self.
+        On error, the last known tasks (if any) are kept */
         if let Err(e) = get_gtasks_events(&context.client, self).await {
             error!("Failed to fetch Google Tasks: {e:#}");
         }
@@ -140,6 +149,13 @@ impl GTasksState {
             data,
             config,
         }
+    }
+
+    /// Returns true if the state has something to display: it is enabled (`data`
+    /// exists) and its data was fetched successfully at least once.
+    pub fn has_data(&self) -> bool {
+        // `is_some_and`: true only if the `Option` is `Some` AND the given method returns true
+        self.data.as_ref().is_some_and(GTasksData::has_data)
     }
 }
 
@@ -220,8 +236,7 @@ async fn get_gtasks_events(client: &Client, gtasks_object: &mut GTasksData) -> R
         }
     }
     trace!("Parsed Tasks: {:#?}", tasks);
-    gtasks_object.nb = tasks.len();
-    gtasks_object.tasks = tasks;
+    gtasks_object.tasks = Some(tasks);
 
     Ok(())
 }

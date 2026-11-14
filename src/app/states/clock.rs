@@ -112,6 +112,12 @@ impl ClockState {
             config
         }
     }
+
+    /// Returns true if the state has something to display.
+    /// The clock needs no fetch: it has data as soon as it is enabled.
+    pub fn has_data(&self) -> bool {
+        self.data.is_some()
+    }
 }
 
 // ================================================================= 

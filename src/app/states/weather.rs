@@ -38,11 +38,17 @@ impl WeatherConfig {
 /// Public struct containing weather data
 #[derive(Default)] // used to be able to fill with default values
 pub struct WeatherData {
-    weather_summary:    String,     // concise weather summary
+    // An `Option` rather than empty strings: "no forecast yet" can't be mistaken for a real one
+    forecast:           Option<Forecast>,   // last forecast received, `None` until the first successful fetch
+    request_url:        String,             // full request URL to send to weather API
+}
+
+/// Forecast of the day, as received from the weather API
+struct Forecast {
+    summary:            String,     // concise weather summary
     temp_max:           String,     // maximum daily temperature
     temp_min:           String,     // minimum daily temperature
     precipitation_sum:  String,     // sum of daily precipitations (including rain, snow, hail)
-    request_url:        String,     // full request URL to send to weather API
 }
 
 
@@ -65,8 +71,9 @@ impl WeatherData {
         let mut weather = init()
             .context("Failed to initialize weather data")?;
 
-        /* Get data from the weather API. A failed fetch is logged by `fetch_data`
-        and keeps the default values: the next `fetch_data` will try again. */
+        /* Get data from the weather API. A failed fetch (e.g. no network at boot) is
+        logged by `fetch_data` and isn't fatal: the state has no data yet, so it isn't
+        displayed, and the next `fetch_data` will try again. */
         weather.fetch_data(context).await;
 
         Ok(weather)
@@ -74,10 +81,19 @@ impl WeatherData {
 
     /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
+        // `let ... else`: binds `forecast` if there is one, otherwise runs the `else` block.
+        // The app only draws states that have data, so this is just a safety net.
+        let Some(forecast) = &self.forecast else { return };
+
         info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
-            self.weather_summary, self.temp_max, self.temp_min, self.precipitation_sum);
+            forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
         let color = Color { r: 0, g: 255, b: 0 };
         matrix.fill(color);
+    }
+
+    /// Returns true once a forecast has been received (there is something to display)
+    pub fn has_data(&self) -> bool {
+        self.forecast.is_some()
     }
 
     /// Method for fetching data from public API
@@ -85,16 +101,19 @@ impl WeatherData {
         /* Get data from the weather API */
         match get_weather(&context.client, &self.request_url).await {
             Ok(data) => {
-                self.weather_summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
+                let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
                     error!("Failed to parse weather code: {e:#}");
                     "Unknown".to_string()
                 });
-                self.temp_max = data.apparent_temperature_max.to_string();
-                self.temp_min = data.apparent_temperature_min.to_string();
-                self.precipitation_sum = data.precipitation_sum.to_string();
+                self.forecast = Some(Forecast {
+                    summary,
+                    temp_max:           data.apparent_temperature_max.to_string(),
+                    temp_min:           data.apparent_temperature_min.to_string(),
+                    precipitation_sum:  data.precipitation_sum.to_string(),
+                });
             }
             Err(e) => {
-                /* Handle the error */
+                /* Handle the error: the last known forecast (if any) is kept */
                 error!("Failed to fetch weather data: {e:#}");
             }
         }
@@ -127,6 +146,13 @@ impl WeatherState {
             data,
             config
         }
+    }
+
+    /// Returns true if the state has something to display: it is enabled (`data`
+    /// exists) and its data was fetched successfully at least once.
+    pub fn has_data(&self) -> bool {
+        // `is_some_and`: true only if the `Option` is `Some` AND the given method returns true
+        self.data.as_ref().is_some_and(WeatherData::has_data)
     }
 }
 

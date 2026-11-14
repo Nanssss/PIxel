@@ -110,6 +110,16 @@ impl AppStatesEnum {
             AppStatesEnum::GTasks  => states.gtasks.config.is_enabled(),
         }
     }
+
+    /// Return if state has something to display. An enabled state can have no data
+    /// yet: its first fetch failed (e.g. no network at boot) and will be retried.
+    pub fn has_data(&self, states: &AppStates) -> bool {
+        match self {
+            AppStatesEnum::Clock   => states.clock.has_data(),
+            AppStatesEnum::Weather => states.weather.has_data(),
+            AppStatesEnum::GTasks  => states.gtasks.has_data(),
+        }
+    }
 }
 
 /// Struct storing all states
@@ -165,7 +175,15 @@ impl App {
     }
 
     /// Call draw() method of corresponding state
+    ///
+    /// Does nothing while the current state has no data, which only happens when no
+    /// state can be displayed at all (e.g. only the weather is enabled, and there
+    /// is no network since boot): the screen then stays as it is.
     pub fn draw(&mut self) {
+        if !self.current_state.has_data(&self.states) {
+            return;
+        }
+
         match &self.current_state {
             AppStatesEnum::Clock    => self.states.clock.data.as_ref().expect(DATA).draw(&mut self.matrix),
             AppStatesEnum::Weather  => self.states.weather.data.as_ref().expect(DATA).draw(&mut self.matrix),
@@ -185,15 +203,26 @@ impl App {
         }
     }
 
-    /// Switch to next state
-    pub fn next_state(&mut self) {
-        /* Iterate through the states until we find an enabled one */
+    /// Switch to the next state that has something to display, refreshing its data first.
+    ///
+    /// A state with no data yet is skipped, and retried on the next rotation.
+    /// If no state can be displayed, we end up back on the current one.
+    pub async fn next_state(&mut self) {
+        /* Iterate through the states until we find one to display */
         for _ in 0..NB_STATES {
             /* Move to next state */
             self.current_state = self.current_state.next();
 
-            /* Stop searching as soon as we found an enabled state */
-            if self.current_state.is_enabled(&self.states) {
+            /* Disabled states are never fetched nor displayed */
+            if !self.current_state.is_enabled(&self.states) {
+                continue;
+            }
+
+            /* Refresh its data right before displaying it (or retry if it never got any) */
+            self.fetch_data().await;
+
+            /* Stop searching as soon as we found a state to display */
+            if self.current_state.has_data(&self.states) {
                 break;
             }
         }
