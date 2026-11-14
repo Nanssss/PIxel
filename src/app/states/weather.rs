@@ -62,30 +62,14 @@ impl WeatherData {
     /// WeatherData constructor
     pub async fn new(context: &AppContext) -> Result<Self> {
         /* Initialize some data in the struct */
-        let weather_init = init()
-            .context("Failed to initialize weather data: {:?}")?;
+        let mut weather = init()
+            .context("Failed to initialize weather data")?;
 
-        /* Get data from the weather API */
-        let data = match get_weather(&context.client, &weather_init.request_url).await {
-            Ok(d) => d,
-            Err(e) => {
-                /* Handle the error */
-                error!("Failed to fetch weather data: {:?}", e);
-                return Ok(weather_init);
-            }
-        };
+        /* Get data from the weather API. A failed fetch is logged by `fetch_data`
+        and keeps the default values: the next `fetch_data` will try again. */
+        weather.fetch_data(context).await;
 
-        /* Return WeatherData struct */
-        Ok(WeatherData {
-            weather_summary:    code_to_weather(data.weather_code).unwrap_or_else(|e| {
-                error!("Failed to parse weather code: {:?}", e);
-                "Unknown".to_string()
-            }),
-            temp_max:           data.apparent_temperature_max.to_string(),
-            temp_min:           data.apparent_temperature_min.to_string(),
-            precipitation_sum:  data.precipitation_sum.to_string(),
-            ..weather_init // fill other fields from init data
-        })
+        Ok(weather)
     }
 
     /// Method for drawing data to the screen
@@ -102,7 +86,7 @@ impl WeatherData {
         match get_weather(&context.client, &self.request_url).await {
             Ok(data) => {
                 self.weather_summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
-                    error!("Failed to parse weather code: {:?}", e);
+                    error!("Failed to parse weather code: {e:#}");
                     "Unknown".to_string()
                 });
                 self.temp_max = data.apparent_temperature_max.to_string();
@@ -111,7 +95,7 @@ impl WeatherData {
             }
             Err(e) => {
                 /* Handle the error */
-                error!("Failed to fetch weather data: {:?}", e);
+                error!("Failed to fetch weather data: {e:#}");
             }
         }
     }
@@ -120,12 +104,11 @@ impl WeatherData {
 
 impl WeatherState { 
     /// WeatherState constructor
-    pub async fn new(config: Option<WeatherConfig>, context: &AppContext) -> Self {
+    pub async fn new(mut config: WeatherConfig, context: &AppContext) -> Self {
         /* 
-        * data is initialized only if config is Some(x) and enabled
-        * If in the future WeatherData needs config, replace '_' with cfg
+        * data is initialized only if the state is enabled
+        * If in the future WeatherData needs config, pass it &config
         */
-        let mut config = config.unwrap_or_default();
         let mut data = None;
         
         if config.is_enabled() {

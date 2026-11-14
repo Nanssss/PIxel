@@ -99,12 +99,11 @@ impl ClockData {
 
 impl ClockState { 
     /// ClockState constructor
-    pub fn new(config: Option<ClockConfig>) -> Self {
+    pub fn new(config: ClockConfig) -> Self {
         /* 
-        * data is initialized only if config is Some(x) and enabled
-        * If in the future ClockData needs config, use config.as_ref().map(|cfg| ClockData::new(cfg))
+        * data is initialized only if the state is enabled
+        * If in the future ClockData needs config, use ClockData::new(&config)
         */
-        let config = config.unwrap_or_default();
         // `bool::then` returns Some(ClockData::new()) if enabled, None otherwise
         let data = config.is_enabled().then(ClockData::new);
 

@@ -7,6 +7,7 @@ use reqwest::Client;
 use std::sync::Arc;
 use std::fs;
 use tracing::{info, warn};
+use anyhow::{Context, Result};
 use serde::Deserialize;
 
 /// First state on boot
@@ -16,6 +17,10 @@ const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
+
+/// Panic message if the current state has no data. This can't happen: only enabled
+/// states are ever selected, and a state is only enabled if its data was created.
+const DATA: &str = "the current state is enabled, so it has data";
 
 // ================================================================= 
 //   AppContext part                                               |
@@ -41,7 +46,8 @@ impl AppContext {
 // ================================================================= 
 
 /// Struct used to match the TOML file
-#[derive(Debug, Clone, Deserialize)]
+// `Default` can be derived because every field type implements `Default`
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct AppConfig {
     pub clock: ClockConfig,
     pub weather: WeatherConfig,
@@ -49,19 +55,29 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    /// Loads the config from the config.toml file
-    pub fn load() -> Option<Self> {
+    /// Loads the config from the config.toml file, or falls back to the default
+    /// config (and logs why) if it can't be loaded.
+    pub fn load_or_default() -> Self {
+        // `{e:#}` prints the whole anyhow context chain on one line
+        Self::load()
+            .inspect_err(|e| warn!("No config loaded, using defaults: {e:#}"))
+            .unwrap_or_default()
+    }
+
+    /// Reads and parses the config.toml file: only propagates errors,
+    /// `load_or_default` decides what to do with them.
+    ///
+    /// # Errors
+    /// If the file can't be read, or isn't a valid config.
+    fn load() -> Result<Self> {
         let config_file_path = EXECUTABLE_DIR.join(CONFIG_FILE_PATH);
 
-        let content = fs::read_to_string(&config_file_path).inspect_err(|e| {
-            warn!("Error while reading {:?}:\n{e}", config_file_path);
-        }).ok()?;
+        // `with_context` takes a closure: the message is only built if there is an error
+        let content = fs::read_to_string(&config_file_path)
+            .with_context(|| format!("failed to read {config_file_path:?}"))?;
 
-        let config: AppConfig= toml::from_str(&content).inspect_err(|e| {
-            warn!("failed to deserialize {:?}:\n{e}", config_file_path);
-        }).ok()?;
-
-        Some(config)
+        toml::from_str(&content)
+            .with_context(|| format!("failed to deserialize {config_file_path:?}"))
     }
 }
 
@@ -116,16 +132,17 @@ impl App {
     /// App constructor
     pub async fn new() -> Self {
         /* Build config */
-        let config = AppConfig::load();
+        let config = AppConfig::load_or_default();
         info!("config:\n{config:?}");
 
         /* Build context */
         let context =   AppContext::new();
 
         /* Build states */
-        let clock =     ClockState::new(config.as_ref().map(|cfg| cfg.clock.clone()));
-        let weather =   WeatherState::new(config.as_ref().map(|cfg| cfg.weather.clone()), &context).await;
-        let gtasks =    GTasksState::new(config.as_ref().map(|cfg| cfg.gtasks.clone()), &context).await;
+        // Each state takes ownership of its own part of the config (no clone needed)
+        let clock =     ClockState::new(config.clock);
+        let weather =   WeatherState::new(config.weather, &context).await;
+        let gtasks =    GTasksState::new(config.gtasks, &context).await;
         let mut states = AppStates {
             clock,
             weather,
@@ -150,9 +167,9 @@ impl App {
     /// Call draw() method of corresponding state
     pub fn draw(&mut self) {
         match &self.current_state {
-            AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(&mut self.matrix),
-            AppStatesEnum::Weather  => self.states.weather.data.as_ref().unwrap().draw(&mut self.matrix),
-            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().unwrap().draw(&mut self.matrix),
+            AppStatesEnum::Clock    => self.states.clock.data.as_ref().expect(DATA).draw(&mut self.matrix),
+            AppStatesEnum::Weather  => self.states.weather.data.as_ref().expect(DATA).draw(&mut self.matrix),
+            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().expect(DATA).draw(&mut self.matrix),
         }
 
         /* Display the frame the state just drew */
@@ -162,9 +179,9 @@ impl App {
     /// Call fetch_data() method of corresponding state
     pub async fn fetch_data(&mut self) {
         match &mut self.current_state{
-            AppStatesEnum::Clock    => self.states.clock.data.as_mut().unwrap().fetch_data(),
-            AppStatesEnum::Weather  => self.states.weather.data.as_mut().unwrap().fetch_data(&self.context).await,
-            AppStatesEnum::GTasks   => self.states.gtasks.data.as_mut().unwrap().fetch_data(&self.context).await,
+            AppStatesEnum::Clock    => self.states.clock.data.as_mut().expect(DATA).fetch_data(),
+            AppStatesEnum::Weather  => self.states.weather.data.as_mut().expect(DATA).fetch_data(&self.context).await,
+            AppStatesEnum::GTasks   => self.states.gtasks.data.as_mut().expect(DATA).fetch_data(&self.context).await,
         }
     }
 

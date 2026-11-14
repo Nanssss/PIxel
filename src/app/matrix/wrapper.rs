@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 use super::ffi::{self, Color};
+use anyhow::{Context, Result, bail};
 use std::ffi::{CString, c_char};
 
 // About both option structs below:
@@ -83,8 +84,11 @@ impl Canvas {
     }
 
     /// Draws UTF-8 text onto the canvas using a loaded BDF font.
-    pub fn draw_text(&mut self, font: &Font, x: i32, y: i32, color: Color, text: &str) -> Result<i32, String> {
-        let c_text = CString::new(text).map_err(|e| format!("Invalid text for C string: {}", e))?;
+    ///
+    /// # Errors
+    /// If `text` contains a NUL byte (it can't be converted to a C string).
+    pub fn draw_text(&mut self, font: &Font, x: i32, y: i32, color: Color, text: &str) -> Result<i32> {
+        let c_text = CString::new(text).context("invalid text for a C string")?;
         let res = unsafe {
             ffi::draw_text(
                 self.ptr,
@@ -109,11 +113,15 @@ pub struct Font {
 
 impl Font {
     /// Loads a BDF font from the specified file path.
-    pub fn load(path: &str) -> Result<Self, String> {
-        let c_path = CString::new(path).map_err(|e| format!("Invalid font path: {}", e))?;
+    ///
+    /// # Errors
+    /// If `path` contains a NUL byte, or if the C library can't load the font.
+    pub fn load(path: &str) -> Result<Self> {
+        let c_path = CString::new(path).context("invalid font path")?;
         let ptr = unsafe { ffi::load_font(c_path.as_ptr()) };
         if ptr.is_null() {
-            return Err(format!("Failed to load font from: {}", path));
+            // `bail!(...)` is anyhow's shortcut for `return Err(anyhow!(...))`
+            bail!("failed to load font from {path}");
         }
         Ok(Self { ptr })
     }
@@ -152,7 +160,10 @@ impl RgbLedMatrix {
     ///
     /// `options` is taken by value (C++ keeps pointers to its strings, so it's
     /// stored in `Self`), `rt_options` only borrowed (read during creation only).
-    pub fn new(options: MatrixOptions, rt_options: &RuntimeOptions) -> Result<Self, &'static str> {
+    ///
+    /// # Errors
+    /// If the C library fails to create the matrix (usually: not run as root).
+    pub fn new(options: MatrixOptions, rt_options: &RuntimeOptions) -> Result<Self> {
         // Safety: the C API expects zeroed structs ("0 = library default"),
         // which is a valid value for these plain C structs (ints, bools, null pointers).
         let mut opts: ffi::RGBLedMatrixOptions = unsafe { std::mem::zeroed() };
@@ -181,7 +192,7 @@ impl RgbLedMatrix {
         // these pointers) and `rt_options` (borrowed, so alive during the call).
         let ptr = unsafe { ffi::led_matrix_create_from_options_and_rt_options(&mut opts, &mut rt_opts) };
         if ptr.is_null() {
-            return Err("Failed to create RGB LED Matrix. Ensure you are running with root privileges.");
+            bail!("failed to create the RGB LED matrix (not running as root?)");
         }
 
         // Moving `options` only moves the `CString` handles, not their heap

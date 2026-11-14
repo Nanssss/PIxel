@@ -44,9 +44,8 @@ pub async fn oauth2_get_google_authenticator() -> Result<OAuth2Data> {
 
 pub async fn oauth2_get_google_token(oauth2_data: &OAuth2Data, scopes: &[&str]) -> Result<String> {
     /* Ensure authenticator exists; return an error if not. */
-    let auth = oauth2_data.authenticator.as_ref().ok_or_else(|| {
-        anyhow::anyhow!("Authenticator not initialized")
-    })?;
+    // `.context()` also works on an `Option`: `None` becomes an error with this message
+    let auth = oauth2_data.authenticator.as_ref().context("Authenticator not initialized")?;
 
     /* token(<scopes>) is the one important function of this crate; it does everything to
     obtain a token that can be sent e.g. as Bearer token. */
@@ -56,7 +55,5 @@ pub async fn oauth2_get_google_token(oauth2_data: &OAuth2Data, scopes: &[&str]) 
         .context("failed to obtain OAuth2 token")?;
 
     trace!("The token is {:?}", token);
-    Ok(token.token().ok_or_else(|| {
-        anyhow::anyhow!("Token is empty")
-    })?.to_string())
+    Ok(token.token().context("Token is empty")?.to_string())
 }

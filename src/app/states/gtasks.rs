@@ -109,19 +109,18 @@ impl GTasksData {
     pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the GCalendar API and directly fill self */
         if let Err(e) = get_gtasks_events(&context.client, self).await {
-            error!("Failed to fetch Google Tasks: {:?}", e);
+            error!("Failed to fetch Google Tasks: {e:#}");
         }
     }
 }
 
 impl GTasksState {
     /// GTasksState constructor
-    pub async fn new(config: Option<GTasksConfig>, context: &AppContext) -> Self {
+    pub async fn new(mut config: GTasksConfig, context: &AppContext) -> Self {
         /* 
-        * data is initialized only if config is Some(x) and enabled
-        * If in the future GTasksData needs config, replace '_' with cfg
+        * data is initialized only if the state is enabled
+        * If in the future GTasksData needs config, pass it &config
         */
-        let mut config = config.unwrap_or_default();
         let mut data = None;
         
         if config.is_enabled() {

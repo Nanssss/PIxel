@@ -44,7 +44,7 @@ impl Matrix {
 
         // `expect` instead of `unwrap`: same panic, but with a helpful message.
         let mut rgb_matrix = RgbLedMatrix::new(options, &rt_options)
-            .expect("failed to init the LED matrix (run as root?)");
+            .expect("failed to init the LED matrix");
 
         // Safety: the canvas is stored next to `rgb_matrix` and never leaves
         // `Matrix`, so it can't be used after the matrix is dropped.
