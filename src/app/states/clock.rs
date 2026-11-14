@@ -2,6 +2,13 @@ use chrono::Local;
 use tracing::info;
 use serde::Deserialize;
 use crate::app::matrix::matrix::*;
+use embedded_graphics::{
+    mono_font::{ascii::FONT_6X10, MonoTextStyle},
+    pixelcolor::Rgb888,
+    prelude::*,
+    primitives::PrimitiveStyle,
+    text::{Alignment, Baseline, Text, TextStyleBuilder},
+};
 
 /* Public struct containing clock config */
 #[derive(Debug, Clone, Deserialize)]
@@ -57,11 +64,33 @@ impl ClockData {
         }
     }
 
-    /* Method fro drawing data to the screen */
+    /* Method for drawing data to the screen */
     pub fn draw(&self, matrix: &mut Matrix) {
         info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
-        let color = Color { r: 255, g: 0, b: 0 };
-        matrix.fill(color);
+
+        /* Draw on an offscreen canvas, then swap it to avoid flickering */
+        // TODO: a new offscreen canvas is allocated on each draw (memory leak), reuse one instead
+        let mut canvas = matrix.create_offscreen_canvas();
+        canvas.clear();
+
+        /* 1px red border around the whole panel */
+        // Drawing on a Canvas can't fail (Error = Infallible), so the Result is ignored
+        let _ = canvas
+            .bounding_box()
+            .into_styled(PrimitiveStyle::with_stroke(Rgb888::RED, 1))
+            .draw(&mut canvas);
+
+        /* Time centered on the panel, with a built-in 6x10 mono font */
+        // Character style = font + color, text style = position of the text around its anchor point
+        let character_style = MonoTextStyle::new(&FONT_6X10, Rgb888::WHITE);
+        let text_style = TextStyleBuilder::new()
+            .alignment(Alignment::Center) // horizontally centered on the anchor
+            .baseline(Baseline::Middle)   // vertically centered on the anchor
+            .build();
+        let _ = Text::with_text_style(&self.time, canvas.bounding_box().center(), character_style, text_style)
+            .draw(&mut canvas);
+
+        matrix.swap_on_vsync(canvas);
     }
 
     /* Method for fetching data */

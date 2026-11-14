@@ -21,6 +21,7 @@ use tracing::info;
     cargo add toml
     cargo add bindgen
     cargo add cc
+    cargo add embedded-graphics
 */
 
 /* Constants */
