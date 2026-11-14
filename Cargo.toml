@@ -9,6 +9,8 @@ license = "GPL-2.0-only"
 anyhow = "1.0.100"
 chrono = "0.4.39"
 embedded-graphics = "0.8.1"
+# Only compiled with `--features simulator`: never built for the Raspberry Pi
+embedded-graphics-simulator = { version = "0.8.0", optional = true }
 hyper-util = "0.1.17"
 openssl = { version = "0.10.82", features = ["vendored"] }
 reqwest = { version = "0.12.14", features = ["blocking", "json"] }
@@ -20,6 +22,11 @@ tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json", "registry"] }
 yup-oauth2 = "12.1.0"
+
+[features]
+# Shows the matrix in a window on the host PC instead of driving the real panel:
+# `cargo run --features simulator` (needs SDL2: `sudo apt install libsdl2-dev`)
+simulator = ["dep:embedded-graphics-simulator"]
 
 [build-dependencies]
 bindgen = "0.73.2"

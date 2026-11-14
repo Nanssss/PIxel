@@ -4,7 +4,7 @@ export
 
 BINARY_NAME = PIxel
 
-.PHONY: all host target clean
+.PHONY: all host sim target clean
 
 # Default action builds for the cross-target (ARMv6)
 all: target
@@ -12,6 +12,11 @@ all: target
 # Build your local host machine
 host:
 	cargo build --release
+
+# Run on your local host machine, with the matrix simulated in a window
+sim:
+	@mkdir -p target/debug && ln -sfn ../../in target/debug/in
+	cargo run --features simulator
 
 # Build for Raspberry Pi Zero
 target:
