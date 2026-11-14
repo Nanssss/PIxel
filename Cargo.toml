@@ -7,7 +7,6 @@ license = "GPL-2.0-only"
 
 [dependencies]
 anyhow = "1.0.100"
-cc = "1.11.1"
 chrono = "0.4.39"
 embedded-graphics = "0.8.1"
 hyper-util = "0.1.17"

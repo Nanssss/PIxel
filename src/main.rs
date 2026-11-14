@@ -20,7 +20,6 @@ use tracing::info;
     cargo add anyhow
     cargo add toml
     cargo add bindgen
-    cargo add cc
     cargo add embedded-graphics
 */
 
@@ -53,7 +52,7 @@ async fn main() {
 //    Static functions                                             |
 // ================================================================= 
 
-/* Function that initializes tracing subscriber for logging */
+/// Function that initializes tracing subscriber for logging
 fn init_logging() {
     /* 1. Create a rotating file appender (daily or hourly) */
     let file_appender = rolling::RollingFileAppender::builder()

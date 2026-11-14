@@ -21,13 +21,13 @@ const CENTERED: TextStyle = TextStyleBuilder::new()
     .baseline(Baseline::Middle)
     .build();
 
-/* Public struct containing clock config */
+/// Public struct containing clock config
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClockConfig {
     enabled: bool,
 }
 
-/* Default trait for config */
+/// Default trait for config
 impl Default for ClockConfig {
     fn default() -> Self {
         ClockConfig {
@@ -37,23 +37,23 @@ impl Default for ClockConfig {
 }
 
 impl ClockConfig {
-    pub fn set_state(&mut self, enabled: bool) {
+    pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
 
-    pub fn get_state(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 }
 
-/* Public struct containing clock data */
+/// Public struct containing clock data
 pub struct ClockData {
     date: String,
     time: String,
 }
 
 
-/* Public struct containing global clock state */
+/// Public struct containing global clock state
 pub struct ClockState {
     pub data: Option<ClockData>,
     pub config: ClockConfig,
@@ -66,7 +66,7 @@ pub struct ClockState {
 
 impl ClockData {
 
-    /* ClockData constructor */
+    /// ClockData constructor
     pub fn new() -> Self {
         let (date, time) = get_date_time();
         ClockData {
@@ -75,21 +75,21 @@ impl ClockData {
         }
     }
 
-    /* Method for drawing data to the screen */
+    /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
         info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
 
         let screen = matrix.bounding_box();
 
-        // Drawing on the matrix can't fail (Error = Infallible): `Ok` is the only possible case
+        // Drawing on the matrix can't fail (Error = Infallible), so `unwrap()` never panics
         /* 1px red border around the whole panel */
-        let Ok(_) = screen.into_styled(BORDER_STYLE).draw(matrix);
+        screen.into_styled(BORDER_STYLE).draw(matrix).unwrap();
 
         /* Time centered on the panel */
-        let Ok(_) = Text::with_text_style(&self.time, screen.center(), TIME_FONT, CENTERED).draw(matrix);
+        Text::with_text_style(&self.time, screen.center(), TIME_FONT, CENTERED).draw(matrix).unwrap();
     }
 
-    /* Method for fetching data */
+    /// Method for fetching data
     pub fn fetch_data(&mut self) {
         let (date, time) = get_date_time();
         self.date = date;
@@ -98,18 +98,15 @@ impl ClockData {
 }
 
 impl ClockState { 
-    /* ClockState constructor */
+    /// ClockState constructor
     pub fn new(config: Option<ClockConfig>) -> Self {
         /* 
         * data is initialized only if config is Some(x) and enabled
         * If in the future ClockData needs config, use config.as_ref().map(|cfg| ClockData::new(cfg))
         */
         let config = config.unwrap_or_default();
-        let mut data = None;
-        
-        if config.get_state() {
-            data = Some(ClockData::new());
-        }
+        // `bool::then` returns Some(ClockData::new()) if enabled, None otherwise
+        let data = config.is_enabled().then(ClockData::new);
 
         ClockState {
             data,
@@ -126,7 +123,7 @@ fn get_date_time() -> (String, String) {
     let now = Local::now();
     
     let time = now.format("%H:%M:%S").to_string();
-    let date = now.format("%Y:%m:%d").to_string();
+    let date = now.format("%Y-%m-%d").to_string();
 
     (date, time)
 }

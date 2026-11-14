@@ -9,10 +9,10 @@ use std::fs;
 use tracing::{info, warn};
 use serde::Deserialize;
 
-/* First state on boot */
+/// First state on boot
 const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
 
-/* Config file path */
+/// Config file path
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
@@ -21,14 +21,14 @@ const NB_STATES: u8 = 3;
 //   AppContext part                                               |
 // ================================================================= 
 
-/* Struct used to store context used by different states */
+/// Struct used to store context used by different states
 pub struct AppContext {
     pub client: Arc<Client>,
 }
 
-/* Method implementations for AppContext */
+/// Method implementations for AppContext
 impl AppContext {
-    /* AppContext constructor */
+    /// AppContext constructor
     pub fn new() -> Self {
         AppContext {
             client: Arc::new(Client::new()),
@@ -40,7 +40,7 @@ impl AppContext {
 //    AppConfig part                                                |
 // ================================================================= 
 
-/* Struct used to match the TOML file */
+/// Struct used to match the TOML file
 #[derive(Debug, Clone, Deserialize)]
 pub struct AppConfig {
     pub clock: ClockConfig,
@@ -49,7 +49,7 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    /* Loads the config from the config.toml file */
+    /// Loads the config from the config.toml file
     pub fn load() -> Option<Self> {
         let config_file_path = EXECUTABLE_DIR.join(CONFIG_FILE_PATH);
 
@@ -69,7 +69,7 @@ impl AppConfig {
 //    App part                                                     |
 // ================================================================= 
 
-/* Enum declaring state variants */
+/// Enum declaring state variants
 enum AppStatesEnum {
     Clock,
     Weather,
@@ -77,7 +77,7 @@ enum AppStatesEnum {
 }
 
 impl AppStatesEnum {
-    /* Return the next state in the application cycle */
+    /// Return the next state in the application cycle
     pub fn next(&self) -> Self {
         match self {
             AppStatesEnum::Clock   => AppStatesEnum::Weather,
@@ -86,24 +86,24 @@ impl AppStatesEnum {
         }
     }
 
-    /* Return if state is enabled */
+    /// Return if state is enabled
     pub fn is_enabled(&self, states: &AppStates) -> bool {
         match self {
-            AppStatesEnum::Clock   => states.clock.config.get_state(),
-            AppStatesEnum::Weather => states.weather.config.get_state(),
-            AppStatesEnum::GTasks  => states.gtasks.config.get_state(),
+            AppStatesEnum::Clock   => states.clock.config.is_enabled(),
+            AppStatesEnum::Weather => states.weather.config.is_enabled(),
+            AppStatesEnum::GTasks  => states.gtasks.config.is_enabled(),
         }
     }
 }
 
-/* Struct storing all states */
+/// Struct storing all states
 struct AppStates {
     clock:      ClockState,
     weather:    WeatherState,
     gtasks:     GTasksState,
 }
 
-/* App struct */
+/// App struct
 pub struct App {
     context:        AppContext,
     states:         AppStates,
@@ -111,9 +111,9 @@ pub struct App {
     matrix:         Matrix,
 }
 
-/* App methods implementation */
+/// App methods implementation
 impl App {
-    /* App constructor */
+    /// App constructor
     pub async fn new() -> Self {
         /* Build config */
         let config = AppConfig::load();
@@ -147,7 +147,7 @@ impl App {
         }
     }
 
-    /* Call draw() method of corresponding state */
+    /// Call draw() method of corresponding state
     pub fn draw(&mut self) {
         match &self.current_state {
             AppStatesEnum::Clock    => self.states.clock.data.as_ref().unwrap().draw(&mut self.matrix),
@@ -159,7 +159,7 @@ impl App {
         self.matrix.show();
     }
 
-    /* Call fetch_data() method of corresponding state */
+    /// Call fetch_data() method of corresponding state
     pub async fn fetch_data(&mut self) {
         match &mut self.current_state{
             AppStatesEnum::Clock    => self.states.clock.data.as_mut().unwrap().fetch_data(),
@@ -168,7 +168,7 @@ impl App {
         }
     }
 
-    /* Switch to next state */
+    /// Switch to next state
     pub fn next_state(&mut self) {
         /* Iterate through the states until we find an enabled one */
         for _ in 0..NB_STATES {
@@ -204,7 +204,10 @@ fn select_first_state(states: &mut AppStates) -> AppStatesEnum {
     /* If no state is enabled, fall back to Clock state */
     if !found_enabled {
         warn!("All states were disabled in config! Falling back to Clock.");
-        states.clock.config.set_state(true);
+        states.clock.config.set_enabled(true);
+        // The clock was disabled at startup, so its data was never created
+        states.clock.data = Some(ClockData::new());
+        return AppStatesEnum::Clock;
     }
 
     current_state

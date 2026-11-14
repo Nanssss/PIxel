@@ -3,7 +3,7 @@ use crate::app::dep::oauth2::*;
 use crate::app::matrix::matrix::*;
 use reqwest::Client;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_json::Value;
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
@@ -16,13 +16,13 @@ const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/cal
 */
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
-/* Public struct containing gtasks config */
+/// Public struct containing gtasks config
 #[derive(Debug, Clone, Deserialize)]
 pub struct GTasksConfig {
     pub enabled: bool,
 }
 
-/* Default values for config */
+/// Default values for config
 impl Default for GTasksConfig {
     fn default() -> Self {
         GTasksConfig {
@@ -32,16 +32,16 @@ impl Default for GTasksConfig {
 }
 
 impl GTasksConfig {
-    pub fn set_state(&mut self, enabled: bool) {
+    pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
 
-    pub fn get_state(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 }
 
-/* Public struct containing gtasks data */
+/// Public struct containing gtasks data
 #[derive(Default)] // to be able to fill with default values
 pub struct GTasksData {
     tasks:                  Vec<GTask>,     // Vec of tasks
@@ -50,7 +50,7 @@ pub struct GTasksData {
     oauth2:                 OAuth2Data,     // OAuth2 authenticator data
 }
 
-/* Atomic task */
+/// Atomic task
 #[derive(Debug)] // to be able to print with {:?}
 struct GTask {
     title:          String,         // title of the task
@@ -58,7 +58,7 @@ struct GTask {
     description:    String,         // description of the task
 }
 
-/* Public struct containing global clock state */
+/// Public struct containing global gtasks state
 pub struct GTasksState {
     pub data: Option<GTasksData>,
     pub config: GTasksConfig,
@@ -71,7 +71,7 @@ pub struct GTasksState {
 
 impl GTasksData {
 
-    /* GTasksData constructor */
+    /// GTasksData constructor
     pub async fn new(context: &AppContext) -> Result<Self> {
         /* Initialize some data in the struct */
         let mut gtasks_object = init()
@@ -87,7 +87,7 @@ impl GTasksData {
         Ok(gtasks_object)
     }
 
-    /* Method for drawing data to the screen */
+    /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
         /* Print number of tasks */
         info!("[GOOGLE TASKS] - Found {} Tasks", self.nb);
@@ -105,7 +105,7 @@ impl GTasksData {
         matrix.fill(color);
     }
 
-    /* Method for fetching data from public API */
+    /// Method for fetching data from public API
     pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the GCalendar API and directly fill self */
         if let Err(e) = get_gtasks_events(&context.client, self).await {
@@ -115,7 +115,7 @@ impl GTasksData {
 }
 
 impl GTasksState {
-    /* GTasksState constructor */
+    /// GTasksState constructor
     pub async fn new(config: Option<GTasksConfig>, context: &AppContext) -> Self {
         /* 
         * data is initialized only if config is Some(x) and enabled
@@ -124,14 +124,14 @@ impl GTasksState {
         let mut config = config.unwrap_or_default();
         let mut data = None;
         
-        if config.get_state() {
+        if config.is_enabled() {
             match GTasksData::new(context).await {
                 Ok(d) => {
                     data = Some(d);
                 }
                 Err(e) => {
                     error!("Failed to initialize GTasks, automatically disabling state.\n{e:#}");
-                    config.set_state(false);
+                    config.set_enabled(false);
                 }
 
             }
@@ -149,7 +149,7 @@ impl GTasksState {
 //    Static functions                                             |
 // ================================================================= 
 
-/* Function that initializes the GTasksData struct */
+/// Function that initializes the GTasksData struct
 async fn init() -> Result<GTasksData> {
     // Perform OAuth2 login to get the authenticator
     let auth = oauth2_get_google_authenticator().await?;

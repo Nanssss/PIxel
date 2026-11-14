@@ -10,13 +10,13 @@ const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
 // Include the file in the final executable
 const WMO_CODES_JSON: &str = include_str!("./res/wmo_codes.json");
 
-/* Public struct containing weather config */
+/// Public struct containing weather config
 #[derive(Debug, Clone, Deserialize)]
 pub struct WeatherConfig {
     pub enabled: bool,
 }
 
-/* Default values for config */
+/// Default values for config
 impl Default for WeatherConfig {
     fn default() -> Self {
         WeatherConfig{
@@ -26,16 +26,16 @@ impl Default for WeatherConfig {
 }
 
 impl WeatherConfig {
-    pub fn set_state(&mut self, enabled: bool) {
+    pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
 
-    pub fn get_state(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 }
 
-/* Public struct containing weather data */
+/// Public struct containing weather data
 #[derive(Default)] // used to be able to fill with default values
 pub struct WeatherData {
     weather_summary:    String,     // concise weather summary
@@ -46,7 +46,7 @@ pub struct WeatherData {
 }
 
 
-/* Public struct containing global clock state */
+/// Public struct containing global weather state
 pub struct WeatherState {
     pub data: Option<WeatherData>,
     pub config: WeatherConfig,
@@ -59,7 +59,7 @@ pub struct WeatherState {
 
 impl WeatherData {
 
-    /* WeatherData constructor */
+    /// WeatherData constructor
     pub async fn new(context: &AppContext) -> Result<Self> {
         /* Initialize some data in the struct */
         let weather_init = init()
@@ -88,7 +88,7 @@ impl WeatherData {
         })
     }
 
-    /* Method for drawing data to the screen */
+    /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
         info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
             self.weather_summary, self.temp_max, self.temp_min, self.precipitation_sum);
@@ -96,7 +96,7 @@ impl WeatherData {
         matrix.fill(color);
     }
 
-    /* Method for fetching data from public API */
+    /// Method for fetching data from public API
     pub async fn fetch_data(&mut self, context: &AppContext) {
         /* Get data from the weather API */
         match get_weather(&context.client, &self.request_url).await {
@@ -119,7 +119,7 @@ impl WeatherData {
 
 
 impl WeatherState { 
-    /* WeatherState constructor */
+    /// WeatherState constructor
     pub async fn new(config: Option<WeatherConfig>, context: &AppContext) -> Self {
         /* 
         * data is initialized only if config is Some(x) and enabled
@@ -128,14 +128,14 @@ impl WeatherState {
         let mut config = config.unwrap_or_default();
         let mut data = None;
         
-        if config.get_state() {
+        if config.is_enabled() {
             match WeatherData::new(context).await {
                 Ok(d) => {
                     data = Some(d);
                 }
                 Err(e) => {
                     error!("Failed to initialize Weather, automatically disabling state.\n{e:#}");
-                    config.set_state(false);
+                    config.set_enabled(false);
                 }
             }
         }
@@ -151,7 +151,7 @@ impl WeatherState {
 //    Static functions                                             |
 // ================================================================= 
 
-/* Function that initializes the WeatherData struct */
+/// Function that initializes the WeatherData struct
 fn init() -> Result<WeatherData> {
     /* Create a JSON with the request parameters */
     let params = json!({
@@ -182,7 +182,7 @@ fn init() -> Result<WeatherData> {
 }
 
 
-/* Function to get data from public weather API */
+/// Function to get data from public weather API
 async fn get_weather(client: &Client, url: &String) -> Result<DailyData> {
     /* Send HTTP GET request */
     let response = client
@@ -204,7 +204,7 @@ async fn get_weather(client: &Client, url: &String) -> Result<DailyData> {
 }
 
 
-/* Transforms json to query parameters URL */
+/// Transforms json to query parameters URL
 fn json_to_query_string(params_json: &serde_json::Value) -> Result<String> {
     let obj = params_json.as_object()
         .context("expected a json object for weather parameters")?;
@@ -227,7 +227,7 @@ fn json_to_query_string(params_json: &serde_json::Value) -> Result<String> {
 }
 
 
-/* Function to take out first element of Vec<> */
+/// Function to take out first element of `Vec<T>`
 fn first_element_or_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
 where
     T: Default + Clone + Deserialize<'de>,
@@ -238,7 +238,7 @@ where
 }
 
 
-/* Function used to translate weather WMO code to weather String using json code file */
+/// Function used to translate weather WMO code to weather String using json code file
 fn code_to_weather(code: i32) -> Result<String> {
     /* Convert String as json Value */
     let wmo_code_json: serde_json::Value = serde_json::from_str(WMO_CODES_JSON)
