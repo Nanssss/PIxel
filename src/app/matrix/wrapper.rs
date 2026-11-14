@@ -1,53 +1,60 @@
 //! Safe, idiomatic Rust abstractions over the C library (1:1 with the C API).
 //!
-//! All `unsafe` code of the project lives here. C items are always written with
+//! All FFI calls of the project live here. C items are always written with
 //! their `ffi::` prefix: every crossing into C is visible at a glance.
+//! The only `unsafe` code outside of this file is calling the `unsafe fn`s below,
+//! whose `# Safety` section states what the caller must guarantee.
 
 // The wrapper exposes the full C API, even the parts the app doesn't use yet.
 #![allow(dead_code)]
 
 use super::ffi::{self, Color};
-use std::ffi::CString;
+use std::ffi::{CString, c_char};
 
-/// Configuration builder for the LED Matrix.
+// About both option structs below:
+// **`0` / `false` / `None` means "library default", not zero**: the C API only
+// copies non-zero fields over its own defaults (`OPT_COPY_IF_SET` in `led-matrix-c.cc`).
+// E.g. `brightness: 0` actually runs with 100, `gpio_slowdown: 0` with 1 (2 on a Pi 4).
+// So `Default::default()` (all zeros) simply means "all library defaults".
+
+/// Matrix options (C `RGBLedMatrixOptions`, subset). See the note above about zeros.
 ///
-/// **`0` / `None` means "library default", not zero**: the C API only copies
-/// non-zero fields over its own defaults (`OPT_COPY_IF_SET` in `led-matrix-c.cc`).
-/// E.g. `gpio_slowdown: 0` actually runs with the library's 1 (2 on a Pi 4),
-/// and `brightness: 0` with 100.
-#[derive(Debug, Clone)]
+/// Strings are `CString` (NUL-terminated, like C's `const char*`): the C++ matrix
+/// keeps pointers to them, so [`RgbLedMatrix`] stores these options for its whole life.
+#[derive(Debug, Clone, Default)]
 pub struct MatrixOptions {
-    pub rows: i32,
-    pub cols: i32,
-    pub chain_length: i32,
-    pub parallel: i32,
-    pub brightness: i32,
-    pub hardware_mapping: Option<String>,
-    pub led_rgb_sequence: Option<String>,
-    pub gpio_slowdown: i32,
-    pub rp1_pio: i32,
+    pub rows: i32,                          // library default: 32
+    pub cols: i32,                          // library default: 32
+    pub chain_length: i32,                  // library default: 1
+    pub parallel: i32,                      // library default: 1
+    pub brightness: i32,                    // library default: 100
+    pub hardware_mapping: Option<CString>,  // library default: "regular"
+    pub led_rgb_sequence: Option<CString>,  // library default: "RGB"
 }
 
-impl Default for MatrixOptions {
-    fn default() -> Self {
-        Self {
-            rows: 32,
-            cols: 64,
-            chain_length: 1,
-            parallel: 1,
-            brightness: 100,
-            hardware_mapping: Some("adafruit-hat".to_string()),
-            led_rgb_sequence: None, // library default: "RGB"
-            gpio_slowdown: 0,       // library default: 1 (2 on a Pi 4)
-            rp1_pio: 0,             // library default: 0 (RP1 RIO, Pi 5 only)
-        }
-    }
+/// Runtime options (C `RGBLedRuntimeOptions`). See the note above about zeros.
+///
+/// Only read while the matrix is created (C++ keeps no pointer to them),
+/// so [`RgbLedMatrix::new`] just borrows them.
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeOptions {
+    pub gpio_slowdown: i32,                 // library default: 1 (2 on a Pi 4)
+    pub rp1_pio: i32,                       // 0 = RP1 RIO, 1 = RP1 PIO (Pi 5 only)
+    pub daemon: i32,                        // -1 disabled, 0 off (default), 1 on
+    pub drop_privileges: i32,               // -1 disabled, 0 off, 1 on (default)
+    pub do_gpio_init: bool,                 // library default: true
+    pub drop_priv_user: Option<CString>,    // library default: "daemon"
+    pub drop_priv_group: Option<CString>,   // library default: "daemon"
 }
 
-/// A handle to a drawing surface (either active display or offscreen buffer).
+/// A handle to a drawing surface (C `LedCanvas`), owned by the C matrix.
 pub struct Canvas {
     ptr: *mut ffi::LedCanvas,
 }
+
+// Safety: same reasoning as for `RgbLedMatrix`: a canvas is plain framebuffer
+// memory, not tied to a thread, so moving the handle to another thread is fine.
+unsafe impl Send for Canvas {}
 
 impl Canvas {
     /// Clears the canvas (turns all pixels black).
@@ -122,102 +129,89 @@ impl Drop for Font {
     }
 }
 
-/// The main LED Matrix controller managing hardware resources and threads.
-pub struct Matrix {
+/// The LED matrix itself (C `RGBLedMatrix`): owns the hardware and its refresh thread.
+///
+/// Pure 1:1 wrapper: it knows nothing about how the app draws (see `display.rs`).
+pub struct RgbLedMatrix {
     ptr: *mut ffi::RGBLedMatrix,
-    /// Hidden buffer we draw on before displaying it (double buffering).
-    /// `pub(super)`: visible to the sibling modules under `matrix`
-    /// (`graphics.rs`, `high_level.rs`), but not to the rest of the app.
-    pub(super) offscreen: Canvas,
+    /// Options the matrix was created with. The C++ matrix keeps raw pointers to
+    /// their strings (and reads `led_rgb_sequence` again on each canvas creation),
+    /// so they must live as long as the matrix.
+    options: MatrixOptions,
 }
 
-// Safety: `Send` only allows *moving* the `Matrix` to another thread (e.g. when a
+// Safety: `Send` only allows *moving* the matrix to another thread (e.g. when a
 // tokio task migrates), never using it from two threads at once: that would need
 // `Sync`, which we don't implement. The C++ matrix isn't tied to the thread that
 // created it (its refresh thread is internal), so moving the handle is fine.
 // Raw pointers are `!Send` by default, hence this explicit (unsafe) promise.
-unsafe impl Send for Matrix {}
+unsafe impl Send for RgbLedMatrix {}
 
-impl Matrix {
-    /// Initializes the RGB matrix with user options. Requires root privileges on the Pi.
+impl RgbLedMatrix {
+    /// Creates the matrix with the given options. Requires root privileges on the Pi.
     ///
-    /// `pub(super)`: the app goes through `Matrix::new` (see `high_level.rs`).
-    pub(super) fn init(options: MatrixOptions) -> Result<Self, &'static str> {
-        unsafe {
-            // 1. Zero-initialize options structs
-            let mut opts: ffi::RGBLedMatrixOptions = std::mem::zeroed();
-            let mut rt_opts: ffi::RGBLedRuntimeOptions = std::mem::zeroed();
+    /// `options` is taken by value (C++ keeps pointers to its strings, so it's
+    /// stored in `Self`), `rt_options` only borrowed (read during creation only).
+    pub fn new(options: MatrixOptions, rt_options: &RuntimeOptions) -> Result<Self, &'static str> {
+        // Safety: the C API expects zeroed structs ("0 = library default"),
+        // which is a valid value for these plain C structs (ints, bools, null pointers).
+        let mut opts: ffi::RGBLedMatrixOptions = unsafe { std::mem::zeroed() };
+        let mut rt_opts: ffi::RGBLedRuntimeOptions = unsafe { std::mem::zeroed() };
 
-            // Populate standard options
-            opts.rows = options.rows;
-            opts.cols = options.cols;
-            opts.chain_length = options.chain_length;
-            opts.parallel = options.parallel;
-            opts.brightness = options.brightness;
+        // Populate standard options
+        opts.rows = options.rows;
+        opts.cols = options.cols;
+        opts.chain_length = options.chain_length;
+        opts.parallel = options.parallel;
+        opts.brightness = options.brightness;
+        opts.hardware_mapping = opt_c_ptr(&options.hardware_mapping);
+        opts.led_rgb_sequence = opt_c_ptr(&options.led_rgb_sequence);
 
-            // Handle optional strings safely by leaking owned CStrings for FFI lifetime
-            let mapping_c;
-            if let Some(ref m) = options.hardware_mapping {
-                mapping_c = CString::new(m.clone()).map_err(|_| "Invalid mapping string")?;
-                opts.hardware_mapping = mapping_c.as_ptr();
-            }
+        // Populate runtime options
+        rt_opts.gpio_slowdown = rt_options.gpio_slowdown;
+        rt_opts.rp1_pio = rt_options.rp1_pio;
+        rt_opts.daemon = rt_options.daemon;
+        rt_opts.drop_privileges = rt_options.drop_privileges;
+        rt_opts.do_gpio_init = rt_options.do_gpio_init;
+        rt_opts.drop_priv_user = opt_c_ptr(&rt_options.drop_priv_user);
+        rt_opts.drop_priv_group = opt_c_ptr(&rt_options.drop_priv_group);
 
-            let seq_c;
-            if let Some(ref s) = options.led_rgb_sequence {
-                seq_c = CString::new(s.clone()).map_err(|_| "Invalid RGB sequence string")?;
-                opts.led_rgb_sequence = seq_c.as_ptr();
-            }
-
-            // Populate runtime options
-            rt_opts.gpio_slowdown = options.gpio_slowdown;
-            rt_opts.rp1_pio = options.rp1_pio;
-            rt_opts.do_gpio_init = true;
-            rt_opts.daemon = 0;           // Run in foreground by default
-            rt_opts.drop_privileges = 1;  // Drop root privileges after init
-
-            // 2. Instantiate matrix via C library
-            let matrix_ptr = ffi::led_matrix_create_from_options_and_rt_options(&mut opts, &mut rt_opts);
-            if matrix_ptr.is_null() {
-                return Err("Failed to create RGB LED Matrix. Ensure you are running with root privileges.");
-            }
-
-            // 3. Create the single offscreen canvas used for double buffering.
-            let offscreen = Canvas { ptr: ffi::led_matrix_create_offscreen_canvas(matrix_ptr) };
-
-            Ok(Self { ptr: matrix_ptr, offscreen })
+        // Safety: both structs are valid and outlive the call. The strings they
+        // point to belong to `options` (moved into `Self` below, as C++ keeps
+        // these pointers) and `rt_options` (borrowed, so alive during the call).
+        let ptr = unsafe { ffi::led_matrix_create_from_options_and_rt_options(&mut opts, &mut rt_opts) };
+        if ptr.is_null() {
+            return Err("Failed to create RGB LED Matrix. Ensure you are running with root privileges.");
         }
+
+        // Moving `options` only moves the `CString` handles, not their heap
+        // buffers: the pointers given to C++ above stay valid.
+        Ok(Self { ptr, options })
     }
 
-    /// Creates a new offscreen canvas for double buffering.
+    /// Creates a new offscreen canvas, for double buffering with [`RgbLedMatrix::swap_on_vsync`].
     ///
-    /// **Do not use, kept for reference only: draw on the matrix, then call [`Matrix::show`].**
-    /// Each call makes the C library allocate a new framebuffer, which is only
-    /// freed when the matrix is deleted: calling it on every frame leaks memory.
-    #[deprecated(note = "allocates a new framebuffer on each call (memory leak), draw on the matrix and use `show` instead")]
-    fn create_offscreen_canvas(&mut self) -> Canvas {
-        let canvas_ptr = unsafe { ffi::led_matrix_create_offscreen_canvas(self.ptr) };
-        Canvas { ptr: canvas_ptr }
+    /// Each call allocates a new framebuffer, only freed when the matrix is deleted:
+    /// create it once and reuse it, never on every frame (memory leak).
+    ///
+    /// # Safety
+    /// The returned canvas must not be used after `self` is dropped: the C library
+    /// frees it in `led_matrix_delete`. This can't be expressed with a lifetime here
+    /// (the owner would have to store a reference to its own field), so the caller
+    /// guarantees it.
+    pub unsafe fn create_offscreen_canvas(&mut self) -> Canvas {
+        // In edition 2024, the body of an `unsafe fn` still needs `unsafe` blocks.
+        let ptr = unsafe { ffi::led_matrix_create_offscreen_canvas(self.ptr) };
+        Canvas { ptr }
     }
 
-    /// Swaps the offscreen buffer with the active display on vertical sync.
-    /// Returns the old active canvas to be reused as the next offscreen buffer.
+    /// Displays `canvas` on the next vertical sync (blocks until then).
     ///
-    /// **Do not use, kept for reference only: use [`Matrix::show`] instead.**
-    /// It only made sense with `create_offscreen_canvas`; `show` now does
-    /// the swap itself on the canvas owned by the matrix.
-    #[deprecated(note = "use `show` instead, which swaps the canvas owned by the matrix")]
-    fn swap_on_vsync(&mut self, mut offscreen: Canvas) -> Canvas {
-        let new_offscreen_ptr = unsafe { ffi::led_matrix_swap_on_vsync(self.ptr, offscreen.ptr) };
-        offscreen.ptr = new_offscreen_ptr;
-        offscreen
-    }
-
-    /// Swaps the hidden buffer (`offscreen`) with the displayed one, on the next vertical sync.
-    /// Afterwards, `offscreen` holds the previously displayed buffer, content untouched.
-    ///
-    /// `pub(super)`: the app uses [`Matrix::show`] (see `high_level.rs`).
-    pub(super) fn swap_offscreen(&mut self) {
-        self.offscreen.ptr = unsafe { ffi::led_matrix_swap_on_vsync(self.ptr, self.offscreen.ptr) };
+    /// `canvas` must come from [`RgbLedMatrix::create_offscreen_canvas`] of this matrix.
+    /// Afterwards, it points to the previously displayed buffer (content untouched),
+    /// ready to be drawn on as the next offscreen canvas.
+    pub fn swap_on_vsync(&mut self, canvas: &mut Canvas) {
+        canvas.ptr = unsafe { ffi::led_matrix_swap_on_vsync(self.ptr, canvas.ptr) };
     }
 
     /// Gets current brightness (1..100).
@@ -232,12 +226,15 @@ impl Matrix {
 }
 
 /// Automatically cleans up matrix memory and stops hardware threads safely on exit.
-impl Drop for Matrix {
+/// Rust runs this before dropping the fields, so `options` outlives the C++ matrix.
+impl Drop for RgbLedMatrix {
     fn drop(&mut self) {
-        unsafe {
-            if !self.ptr.is_null() {
-                ffi::led_matrix_delete(self.ptr);
-            }
-        }
+        // `ptr` is never null: `new` returns an error instead.
+        unsafe { ffi::led_matrix_delete(self.ptr) }
     }
+}
+
+/// Pointer to the string, or null for `None` (= "library default" for the C API).
+fn opt_c_ptr(s: &Option<CString>) -> *const c_char {
+    s.as_ref().map_or(std::ptr::null(), |s| s.as_ptr())
 }

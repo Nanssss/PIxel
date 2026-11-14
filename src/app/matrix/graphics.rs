@@ -9,13 +9,12 @@
 //! We still override [`DrawTarget::clear`] because the C library has a much
 //! faster "fill the whole canvas" call than setting pixels one by one.
 //!
-//! Usage: draw on the `Matrix` with `use embedded_graphics::prelude::*;` and
-//! `drawable.draw(matrix)`, then call `matrix.show()` to display the frame.
+//! The app draws on `Matrix` (see `display.rs`), which forwards to its offscreen `Canvas`.
 
 use core::convert::Infallible;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
-use super::Color;
-use super::wrapper::{Canvas, Matrix};
+use super::ffi::Color;
+use super::wrapper::Canvas;
 
 /// Converts an `embedded-graphics` color into the C library `Color` struct.
 ///
@@ -69,29 +68,5 @@ impl DrawTarget for Canvas {
     fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
         self.fill(color.into());
         Ok(())
-    }
-}
-
-/// The matrix is drawn on like a canvas: everything goes to its hidden buffer,
-/// and nothing is visible until `Matrix::show` is called.
-impl OriginDimensions for Matrix {
-    fn size(&self) -> Size {
-        OriginDimensions::size(&self.offscreen)
-    }
-}
-
-impl DrawTarget for Matrix {
-    type Color = Rgb888;
-    type Error = Infallible;
-
-    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
-    where
-        I: IntoIterator<Item = Pixel<Self::Color>>,
-    {
-        self.offscreen.draw_iter(pixels)
-    }
-
-    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
-        DrawTarget::clear(&mut self.offscreen, color)
     }
 }
