@@ -2,16 +2,14 @@ use std::sync::Arc;
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
-use tokio::time::{sleep, timeout, Duration};
-use crate::app::states::app_state::{AppContext, Status, FETCH_RETRY_DELAY, FETCH_TIMEOUT};
-use crate::app::states::feed::{Feed, FeedPublisher};
+use tokio::time::Duration;
+use crate::app::states::app_state::{AppContext, Status};
+use crate::app::states::feed::{Feed, Fetcher};
 use crate::app::matrix::{Color, Matrix};
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
-/// How often the forecast is fetched (it only changes a few times a day)
-const REFRESH_PERIOD: Duration = Duration::from_secs(15 * 60);
 // Include the file in the final executable
 const WMO_CODES_JSON: &str = include_str!("./res/wmo_codes.json");
 
@@ -47,7 +45,7 @@ struct Forecast {
 
 /// Public struct containing global weather state
 ///
-/// The state never fetches anything itself: a background task (`fetch_loop`) does,
+/// The state never fetches anything itself: a background task (see `Feed::spawn`) does,
 /// and the state only reads the latest forecast it published.
 pub struct WeatherState {
     forecast:   Feed<Forecast>,     // latest forecast published by the background task
@@ -78,14 +76,15 @@ impl WeatherState {
         /* If in the future the request needs config, pass it &state.config */
         match build_request_url() {
             Ok(url) => {
-                // The task gets the writing side of the feed, the state keeps the reading side
-                let (publisher, feed) = Feed::channel();
+                // The background task must own everything it uses:
+                // `Arc::clone` only copies a pointer to the shared client.
+                let fetcher = ForecastFetcher {
+                    client: Arc::clone(&context.client),
+                    url,
+                };
 
-                // `tokio::spawn` starts the task and returns immediately. The task must own
-                // everything it uses: `Arc::clone` only copies a pointer to the shared client.
-                tokio::spawn(fetch_loop(Arc::clone(&context.client), url, publisher));
-
-                state.forecast = feed;
+                /* Start the background task: returns immediately */
+                state.forecast = Feed::spawn(fetcher);
             }
             Err(e) => {
                 /* Unrecoverable error: the state stays `Disabled` */
@@ -115,53 +114,44 @@ impl WeatherState {
 //    Background task                                              |
 // ================================================================= 
 
-/// Fetches the forecast forever, and publishes each new one to the state.
+/// Fetches the forecast for the background task of the state.
 ///
-/// Runs beside the frame loop, so a slow network never freezes the display.
-async fn fetch_loop(client: Arc<Client>, url: String, publisher: FeedPublisher<Forecast>) {
-    loop {
-        // `timeout` gives up on a fetch that hangs (e.g. wifi lost during the request).
-        // It wraps the result in a second `Result`: the outer `Err` means "timed out".
-        let delay = match timeout(FETCH_TIMEOUT, fetch_forecast(&client, &url)).await {
-            Ok(Ok(forecast)) => {
-                publisher.publish(forecast);
-                REFRESH_PERIOD
-            }
-            /* On a failure the last known forecast is kept, and the fetch is retried sooner */
-            Ok(Err(e)) => {
-                error!("Failed to fetch weather data: {e:#}");
-                FETCH_RETRY_DELAY
-            }
-            Err(_) => {
-                error!("Failed to fetch weather data: timed out");
-                FETCH_RETRY_DELAY
-            }
-        };
-
-        sleep(delay).await;
-    }
+/// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
+/// lives longer than the function that started it, so it can't borrow anything.
+struct ForecastFetcher {
+    client: Arc<Client>,    // HTTP client shared with the other states
+    url:    String,         // full request URL, built once at startup
 }
 
-/// Fetches the forecast of the day from the weather API
-async fn fetch_forecast(client: &Client, url: &str) -> Result<Forecast> {
-    // `?` returns the error to the caller (the task), which decides what to do with it
-    let data = get_weather(client, url).await?;
+impl Fetcher for ForecastFetcher {
+    type Data = Forecast;
 
-    let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
-        error!("Failed to parse weather code: {e:#}");
-        "Unknown".to_string()
-    });
-    let forecast = Forecast {
-        summary,
-        temp_max:           data.apparent_temperature_max.to_string(),
-        temp_min:           data.apparent_temperature_min.to_string(),
-        precipitation_sum:  data.precipitation_sum.to_string(),
-    };
+    const NAME: &'static str = "weather data";
 
-    info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
-        forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
+    /// The forecast only changes a few times a day
+    const REFRESH_PERIOD: Duration = Duration::from_secs(15 * 60);
 
-    Ok(forecast)
+    /// Fetches the forecast of the day from the weather API
+    async fn fetch(&self) -> Result<Forecast> {
+        // `?` returns the error to the caller (the task), which decides what to do with it
+        let data = get_weather(&self.client, &self.url).await?;
+
+        let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
+            error!("Failed to parse weather code: {e:#}");
+            "Unknown".to_string()
+        });
+        let forecast = Forecast {
+            summary,
+            temp_max:           data.apparent_temperature_max.to_string(),
+            temp_min:           data.apparent_temperature_min.to_string(),
+            precipitation_sum:  data.precipitation_sum.to_string(),
+        };
+
+        info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
+            forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
+
+        Ok(forecast)
+    }
 }
 
 // ================================================================= 

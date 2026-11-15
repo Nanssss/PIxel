@@ -6,7 +6,6 @@ use crate::app::states::gtasks::*;
 use reqwest::Client;
 use std::sync::Arc;
 use std::fs;
-use std::time::Duration;
 use tracing::{info, warn};
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -18,14 +17,6 @@ const START_STATE:StateId = StateId::Clock;
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
-
-/// Time after which a background fetch that hangs is abandoned.
-/// Deliberately long: nobody waits for it, and it leaves time to complete the
-/// Google authorization in the browser when it is requested (first run).
-pub const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
-
-/// Wait before fetching again after a failed fetch (e.g. no network at boot)
-pub const FETCH_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 // =================================================================
 //   Status part                                                   |

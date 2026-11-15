@@ -1,10 +1,10 @@
 use std::sync::Arc;
-use crate::app::states::app_state::{AppContext, Status, FETCH_RETRY_DELAY, FETCH_TIMEOUT};
-use crate::app::states::feed::{Feed, FeedPublisher};
+use crate::app::states::app_state::{AppContext, Status};
+use crate::app::states::feed::{Feed, Fetcher};
 use crate::app::dep::oauth2::*;
 use crate::app::matrix::{Color, Matrix};
 use reqwest::Client;
-use tokio::time::{sleep, timeout, Duration};
+use tokio::time::Duration;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
 use serde_json::Value;
@@ -18,8 +18,6 @@ const GCALENDAR_API_BASE_URL: &str = "https://www.googleapis.com/calendar/v3/cal
     (find them at https://developers.google.com/workspace/calendar/api/auth?hl=fr)
 */
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
-/// How often the tasks are fetched
-const REFRESH_PERIOD: Duration = Duration::from_secs(5 * 60);
 
 /// Public struct containing gtasks config
 #[derive(Debug, Clone, Deserialize)]
@@ -52,7 +50,7 @@ struct GTask {
 
 /// Public struct containing global gtasks state
 ///
-/// The state never fetches anything itself: a background task (`fetch_loop`) does,
+/// The state never fetches anything itself: a background task (see `Feed::spawn`) does,
 /// and the state only reads the latest tasks it published.
 pub struct GTasksState {
     /// Latest tasks published by the background task (an empty `Vec` if there is no task)
@@ -85,14 +83,15 @@ impl GTasksState {
         /* If in the future the request needs config, pass it &state.config */
         match oauth2_get_google_authenticator().await {
             Ok(oauth2) => {
-                // The task gets the writing side of the feed, the state keeps the reading side
-                let (publisher, feed) = Feed::channel();
+                // The background task must own everything it uses:
+                // `Arc::clone` only copies a pointer to the shared client.
+                let fetcher = TasksFetcher {
+                    client: Arc::clone(&context.client),
+                    oauth2,
+                };
 
-                // `tokio::spawn` starts the task and returns immediately. The task must own
-                // everything it uses: `Arc::clone` only copies a pointer to the shared client.
-                tokio::spawn(fetch_loop(Arc::clone(&context.client), oauth2, publisher));
-
-                state.tasks = feed;
+                /* Start the background task: returns immediately */
+                state.tasks = Feed::spawn(fetcher);
             }
             Err(e) => {
                 /* Unrecoverable error: the state stays `Disabled` */
@@ -123,30 +122,78 @@ impl GTasksState {
 //    Background task                                              |
 // ================================================================= 
 
-/// Fetches the tasks forever, and publishes each new list to the state.
+/// Fetches the tasks for the background task of the state.
 ///
-/// Runs beside the frame loop, so a slow network never freezes the display.
-async fn fetch_loop(client: Arc<Client>, oauth2: OAuth2Data, publisher: FeedPublisher<Vec<GTask>>) {
-    loop {
-        // `timeout` gives up on a fetch that hangs (e.g. wifi lost during the request).
-        // It wraps the result in a second `Result`: the outer `Err` means "timed out".
-        let delay = match timeout(FETCH_TIMEOUT, fetch_tasks(&client, &oauth2)).await {
-            Ok(Ok(tasks)) => {
-                publisher.publish(tasks);
-                REFRESH_PERIOD
-            }
-            /* On a failure the last known tasks are kept, and the fetch is retried sooner */
-            Ok(Err(e)) => {
-                error!("Failed to fetch Google Tasks: {e:#}");
-                FETCH_RETRY_DELAY
-            }
-            Err(_) => {
-                error!("Failed to fetch Google Tasks: timed out");
-                FETCH_RETRY_DELAY
-            }
-        };
+/// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
+/// lives longer than the function that started it, so it can't borrow anything.
+struct TasksFetcher {
+    client: Arc<Client>,    // HTTP client shared with the other states
+    oauth2: OAuth2Data,     // Google authenticator, prepared once at startup
+}
 
-        sleep(delay).await;
+impl Fetcher for TasksFetcher {
+    type Data = Vec<GTask>;
+
+    const NAME: &'static str = "Google Tasks";
+
+    const REFRESH_PERIOD: Duration = Duration::from_secs(5 * 60);
+
+    /// Fetches the next tasks from the GCalendar API
+    async fn fetch(&self) -> Result<Vec<GTask>> {
+        /* Get token from oauth2 function */
+        let token = oauth2_get_google_token(&self.oauth2, GCALENDAR_SCOPES).await
+            .context("failed to obtain oauth2 token")?;
+
+        /* Request parameters */
+        let query_params = &[
+            ("maxResults",      "5"),
+            ("orderBy",         "startTime"),
+            ("singleEvents",    "true"),
+            ("timeMin",         &Utc::now().to_rfc3339()), // get current time in RFC3339 format
+        ];
+
+        /* Base url */
+        let url = format!("{GCALENDAR_API_BASE_URL}/events");
+
+        /* Send GET request to GTASKS API */
+        let res = self.client
+            .get(&url)
+            .header(AUTHORIZATION, format!("Bearer {}", token))
+            .header(CONTENT_TYPE, "application/json")
+            .query(query_params)
+            .send()
+            .await
+            .context("failed to send GTASKS API request")?;
+
+        let body = res.text().await.context("failed to read response body")?;
+        trace!("GTASKS API Response Body: {}", body);
+        let json: Value = serde_json::from_str(&body).context("failed to parse GTASKS JSON")?;
+
+        // Parse events
+        let mut tasks = Vec::new();
+        if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
+            for item in items {
+                let title = item
+                    .get("summary")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let date = item
+                    .get("start")
+                    .and_then(|v| v.get("dateTime").or_else(|| v.get("date")))
+                    .and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let description = item
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                tasks.push(GTask { title, date, description });
+            }
+        }
+        trace!("Parsed Tasks: {:#?}", tasks);
+        log_tasks(&tasks);
+
+        Ok(tasks)
     }
 }
 
@@ -170,66 +217,6 @@ fn log_tasks(tasks: &[GTask]) {
     }
 }
 
-/// Fetches the next tasks from the GCalendar API.
-///
-/// The tasks are returned as a new value (rather than written into the state):
-/// the background task that calls this then publishes them to the state.
-async fn fetch_tasks(client: &Client, oauth2: &OAuth2Data) -> Result<Vec<GTask>> {
-    /* Get token from oauth2 function */
-    let token = oauth2_get_google_token(oauth2, GCALENDAR_SCOPES).await
-        .context("failed to obtain oauth2 token")?;
-
-    /* Request parameters */
-    let query_params = &[
-        ("maxResults",      "5"),
-        ("orderBy",         "startTime"),
-        ("singleEvents",    "true"),
-        ("timeMin",         &Utc::now().to_rfc3339()), // get current time in RFC3339 format
-    ];
-
-    /* Base url */
-    let url = format!("{GCALENDAR_API_BASE_URL}/events");
-
-    /* Send GET request to GTASKS API */
-    let res = client
-        .get(&url)
-        .header(AUTHORIZATION, format!("Bearer {}", token))
-        .header(CONTENT_TYPE, "application/json")
-        .query(query_params)
-        .send()
-        .await
-        .context("failed to send GTASKS API request")?;
-
-    let body = res.text().await.context("failed to read response body")?;
-    trace!("GTASKS API Response Body: {}", body);
-    let json: Value = serde_json::from_str(&body).context("failed to parse GTASKS JSON")?;
-
-    // Parse events
-    let mut tasks = Vec::new();
-    if let Some(items) = json.get("items").and_then(|v| v.as_array()) {
-        for item in items {
-            let title = item
-                .get("summary")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let date = item
-                .get("start")
-                .and_then(|v| v.get("dateTime").or_else(|| v.get("date")))
-                .and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let description = item
-                .get("description")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            tasks.push(GTask { title, date, description });
-        }
-    }
-    trace!("Parsed Tasks: {:#?}", tasks);
-    log_tasks(&tasks);
-
-    Ok(tasks)
-}
 
 
 // ================================================================= 
