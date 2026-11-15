@@ -77,8 +77,6 @@ impl ClockData {
 
     /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
-        info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
-
         let screen = matrix.bounding_box();
 
         // Drawing on the matrix can't fail (Error = Infallible), so `unwrap()` never panics
@@ -94,6 +92,9 @@ impl ClockData {
         let (date, time) = get_date_time();
         self.date = date;
         self.time = time;
+
+        // Logged here rather than in `draw`, which runs on every frame
+        info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
     }
 }
 

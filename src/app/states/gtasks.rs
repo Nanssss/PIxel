@@ -81,18 +81,8 @@ impl GTasksData {
     /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
         // The app only draws `Ready` states, so this is just a safety net.
-        let Some(tasks) = &self.tasks else { return };
-
-        /* Print number of tasks */
-        info!("[GOOGLE TASKS] - Found {} Tasks", tasks.len());
-
-        /* Print each task */
-        for task in tasks {
-            info!("[GOOGLE TASKS] - Task: {} ({})", task.title, task.date);
-            
-            if !task.description.is_empty() {
-                info!("[GOOGLE TASKS] - Task description: {}", task.description);
-            }
+        if self.tasks.is_none() {
+            return;
         }
 
         let color = Color { r: 0, g: 0, b: 255 };
@@ -106,7 +96,29 @@ impl GTasksData {
     pub async fn fetch_data(&mut self, context: &AppContext) -> Result<()> {
         /* Get data from the GCalendar API and directly fill self.
         The error (if any) is returned to the caller (the state), which decides what to do with it */
-        get_gtasks_events(&context.client, self).await
+        get_gtasks_events(&context.client, self).await?;
+
+        // Logged here rather than in `draw`, which runs on every frame
+        self.log_tasks();
+
+        Ok(())
+    }
+
+    /// Logs the tasks currently stored (nothing if none were fetched yet)
+    fn log_tasks(&self) {
+        let Some(tasks) = &self.tasks else { return };
+
+        /* Print number of tasks */
+        info!("[GOOGLE TASKS] - Found {} Tasks", tasks.len());
+
+        /* Print each task */
+        for task in tasks {
+            info!("[GOOGLE TASKS] - Task: {} ({})", task.title, task.date);
+
+            if !task.description.is_empty() {
+                info!("[GOOGLE TASKS] - Task description: {}", task.description);
+            }
+        }
     }
 }
 

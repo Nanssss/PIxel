@@ -72,12 +72,11 @@ impl WeatherData {
 
     /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
-        // `let ... else`: binds `forecast` if there is one, otherwise runs the `else` block.
         // The app only draws `Ready` states, so this is just a safety net.
-        let Some(forecast) = &self.forecast else { return };
+        if self.forecast.is_none() {
+            return;
+        }
 
-        info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
-            forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
         let color = Color { r: 0, g: 255, b: 0 };
         matrix.fill(color);
     }
@@ -95,12 +94,17 @@ impl WeatherData {
             error!("Failed to parse weather code: {e:#}");
             "Unknown".to_string()
         });
-        self.forecast = Some(Forecast {
+        let forecast = Forecast {
             summary,
             temp_max:           data.apparent_temperature_max.to_string(),
             temp_min:           data.apparent_temperature_min.to_string(),
             precipitation_sum:  data.precipitation_sum.to_string(),
-        });
+        };
+
+        // Logged here rather than in `draw`, which runs on every frame
+        info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
+            forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
+        self.forecast = Some(forecast);
 
         Ok(())
     }
