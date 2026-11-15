@@ -6,6 +6,7 @@ use crate::app::states::gtasks::*;
 use reqwest::Client;
 use std::sync::Arc;
 use std::fs;
+use std::time::Duration;
 use tracing::{info, warn};
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -17,6 +18,14 @@ const START_STATE:StateId = StateId::Clock;
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
+
+/// Time after which a background fetch that hangs is abandoned.
+/// Deliberately long: nobody waits for it, and it leaves time to complete the
+/// Google authorization in the browser when it is requested (first run).
+pub const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Wait before fetching again after a failed fetch (e.g. no network at boot)
+pub const FETCH_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 // =================================================================
 //   Status part                                                   |
@@ -34,7 +43,7 @@ pub enum Status {
     /// never fetched nor displayed.
     Disabled,
     /// Enabled, but nothing to display yet (e.g. no network at boot):
-    /// skipped, and fetched again on each rotation.
+    /// skipped until its background task gets some data.
     Waiting,
     /// Has something to display.
     Ready,
@@ -146,7 +155,6 @@ impl AppStates {
 
 /// App struct
 pub struct App {
-    context:        AppContext,
     states:         AppStates,
     current_state:  StateId,
     matrix:         Matrix,
@@ -161,12 +169,14 @@ impl App {
         info!("config:\n{config:?}");
 
         /* Build context */
+        // Only needed while the states are built: each background task keeps its own handle on it
         let context =   AppContext::new();
 
         /* Build states */
-        // Each state takes ownership of its own part of the config (no clone needed)
+        // Each state takes ownership of its own part of the config (no clone needed).
+        // States that need the network start their background fetch task here.
         let clock =     ClockState::new(config.clock);
-        let weather =   WeatherState::new(config.weather, &context).await;
+        let weather =   WeatherState::new(config.weather, &context);
         let gtasks =    GTasksState::new(config.gtasks, &context).await;
         let mut states = AppStates {
             clock,
@@ -182,7 +192,6 @@ impl App {
 
         /* Return constructed App */
         App { 
-            context,
             states,
             current_state,
             matrix,
@@ -209,28 +218,16 @@ impl App {
         self.matrix.show();
     }
 
-    /// Call refresh() method of corresponding state.
-    /// Each state decides by itself if there is something to do (a disabled state does nothing).
-    async fn refresh(&mut self) {
-        match &self.current_state {
-            StateId::Clock    => self.states.clock.refresh(),
-            StateId::Weather  => self.states.weather.refresh(&self.context).await,
-            StateId::GTasks   => self.states.gtasks.refresh(&self.context).await,
-        }
-    }
-
-    /// Switch to the next state that is ready to be displayed, refreshing its data first.
+    /// Switch to the next state that is ready to be displayed.
     ///
-    /// A state that isn't `Ready` after its refresh is skipped, and retried on the next rotation.
-    /// If no state can be displayed, we end up back on the current one.
-    pub async fn next_state(&mut self) {
+    /// Never waits: the data is fetched by the background task of each state. A state
+    /// that isn't `Ready` is skipped, and gets its chance again on the next rotation.
+    /// If no other state can be displayed, we end up back on the current one.
+    pub fn next_state(&mut self) {
         /* Iterate through the states until we find one to display */
         for _ in 0..NB_STATES {
             /* Move to next state */
             self.current_state = self.current_state.next();
-
-            /* Refresh its data right before displaying it (or retry if it never got any) */
-            self.refresh().await;
 
             /* Stop searching as soon as we found a state to display */
             if self.states.status_of(self.current_state) == Status::Ready {

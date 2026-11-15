@@ -1,5 +1,4 @@
 use chrono::Local;
-use tracing::info;
 use serde::Deserialize;
 use crate::app::matrix::Matrix;
 use crate::app::states::app_state::Status;
@@ -81,14 +80,6 @@ impl ClockState {
     /// Returns the runtime status of the state
     pub fn status(&self) -> Status {
         self.status
-    }
-
-    /// Called when the app switches to this state, like for the other states.
-    /// The clock has nothing to fetch: it only logs that it is displayed.
-    pub fn refresh(&self) {
-        if self.status != Status::Disabled {
-            info!("[CLOCK] - {}", Local::now().format("%Y-%m-%d %H:%M:%S"));
-        }
     }
 
     /// Method for drawing the state to the screen

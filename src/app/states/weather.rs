@@ -1,12 +1,17 @@
+use std::sync::Arc;
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
-use crate::app::states::app_state::{AppContext, Status};
+use tokio::sync::watch;
+use tokio::time::{sleep, timeout, Duration};
+use crate::app::states::app_state::{AppContext, Status, FETCH_RETRY_DELAY, FETCH_TIMEOUT};
 use crate::app::matrix::{Color, Matrix};
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
 
 const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
+/// How often the forecast is fetched (it only changes a few times a day)
+const REFRESH_PERIOD: Duration = Duration::from_secs(15 * 60);
 // Include the file in the final executable
 const WMO_CODES_JSON: &str = include_str!("./res/wmo_codes.json");
 
@@ -31,14 +36,6 @@ impl WeatherConfig {
     }
 }
 
-/// Public struct containing weather data
-#[derive(Default)] // used to be able to fill with default values
-pub struct WeatherData {
-    // An `Option` rather than empty strings: "no forecast yet" can't be mistaken for a real one
-    forecast:           Option<Forecast>,   // last forecast received, `None` until the first successful fetch
-    request_url:        String,             // full request URL to send to weather API
-}
-
 /// Forecast of the day, as received from the weather API
 struct Forecast {
     summary:            String,     // concise weather summary
@@ -49,10 +46,17 @@ struct Forecast {
 
 
 /// Public struct containing global weather state
+///
+/// The state never fetches anything itself: a background task (`fetch_loop`) does,
+/// and the state only reads the latest forecast it published.
 pub struct WeatherState {
-    status: Status,                 // what the app may do with this state
-    data:   Option<WeatherData>,    // `None` only when the state is `Disabled`
-    config: WeatherConfig,          // what the user asked for: never modified
+    /// Latest forecast published by the background task.
+    /// - outer `Option`: `None` when the state is disabled (no task is running),
+    /// - inner `Option`: `None` until the first successful fetch.
+    // A `watch` channel only keeps the last value sent: the task owns the `Sender`,
+    // the state owns the `Receiver`.
+    forecast:   Option<watch::Receiver<Option<Forecast>>>,
+    config:     WeatherConfig,      // what the user asked for: never modified
 }
 
 
@@ -60,81 +64,32 @@ pub struct WeatherState {
 //    Methods implementation                                       |
 // ================================================================= 
 
-impl WeatherData {
-
-    /// WeatherData constructor: only prepares the request, nothing is fetched yet
-    ///
-    /// # Errors
-    /// If the request can't be built: this is unrecoverable.
-    pub fn new() -> Result<Self> {
-        init().context("Failed to initialize weather data")
-    }
-
-    /// Method for drawing data to the screen
-    pub fn draw(&self, matrix: &mut Matrix) {
-        // The app only draws `Ready` states, so this is just a safety net.
-        if self.forecast.is_none() {
-            return;
-        }
-
-        let color = Color { r: 0, g: 255, b: 0 };
-        matrix.fill(color);
-    }
-
-    /// Method for fetching data from public API
-    ///
-    /// # Errors
-    /// If the forecast can't be fetched: the last known forecast (if any) is kept.
-    pub async fn fetch_data(&mut self, context: &AppContext) -> Result<()> {
-        /* Get data from the weather API */
-        // `?` returns the error to the caller (the state), which decides what to do with it
-        let data = get_weather(&context.client, &self.request_url).await?;
-
-        let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
-            error!("Failed to parse weather code: {e:#}");
-            "Unknown".to_string()
-        });
-        let forecast = Forecast {
-            summary,
-            temp_max:           data.apparent_temperature_max.to_string(),
-            temp_min:           data.apparent_temperature_min.to_string(),
-            precipitation_sum:  data.precipitation_sum.to_string(),
-        };
-
-        // Logged here rather than in `draw`, which runs on every frame
-        info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
-            forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
-        self.forecast = Some(forecast);
-
-        Ok(())
-    }
-}
-
-
 impl WeatherState { 
-    /// WeatherState constructor
-    pub async fn new(config: WeatherConfig, context: &AppContext) -> Self {
+    /// WeatherState constructor: starts the background task fetching the forecast.
+    ///
+    /// Nothing is fetched here: the state is `Waiting` until the first forecast arrives.
+    pub fn new(config: WeatherConfig, context: &AppContext) -> Self {
         /* The state starts disabled, and is only switched on if everything goes well */
         let mut state = WeatherState {
-            status: Status::Disabled,
-            data: None,
+            forecast: None,
             config,
         };
 
-        /* A state turned off in the config stays disabled: its data is never created */
+        /* A state turned off in the config stays disabled: its task is never started */
         if !state.config.is_enabled() {
             return state;
         }
 
-        /* If in the future WeatherData needs config, pass it &state.config */
-        match WeatherData::new() {
-            Ok(data) => {
-                state.data = Some(data);
-                state.status = Status::Waiting;
+        /* If in the future the request needs config, pass it &state.config */
+        match build_request_url() {
+            Ok(url) => {
+                let (forecast_tx, forecast_rx) = watch::channel(None);
 
-                /* First fetch. If it fails (e.g. no network at boot), the state
-                stays `Waiting` and the fetch is retried on the next rotation. */
-                state.refresh(context).await;
+                // `tokio::spawn` starts the task and returns immediately. The task must own
+                // everything it uses: `Arc::clone` only copies a pointer to the shared client.
+                tokio::spawn(fetch_loop(Arc::clone(&context.client), url, forecast_tx));
+
+                state.forecast = Some(forecast_rx);
             }
             Err(e) => {
                 /* Unrecoverable error: the state stays `Disabled` */
@@ -145,39 +100,89 @@ impl WeatherState {
         state
     }
 
-    /// Returns the runtime status of the state
+    /// Returns the runtime status of the state, deduced from what the task published so far
     pub fn status(&self) -> Status {
-        self.status
-    }
-
-    /// Fetches the latest forecast, and updates the status accordingly.
-    /// Does nothing if the state is disabled.
-    pub async fn refresh(&mut self, context: &AppContext) {
-        // `let ... else`: a disabled state has no data, so there is nothing to refresh
-        let Some(data) = &mut self.data else { return };
-
-        match data.fetch_data(context).await {
-            Ok(()) => self.status = Status::Ready,
-            /* The status is kept as it is: a `Waiting` state will be retried,
-            a `Ready` state keeps displaying the last known forecast */
-            Err(e) => error!("Failed to fetch weather data: {e:#}"),
+        match &self.forecast {
+            None => Status::Disabled,
+            // `borrow()` reads the latest value without waiting
+            Some(forecast) if forecast.borrow().is_some() => Status::Ready,
+            Some(_) => Status::Waiting,
         }
     }
 
     /// Method for drawing the state to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
-        if let Some(data) = &self.data {
-            data.draw(matrix);
-        }
+        let Some(forecast) = &self.forecast else { return };
+
+        // `borrow()` locks the value while `forecast` is alive: fine here, `draw` is short
+        // and never awaits. The app only draws `Ready` states, so the `else` is a safety net.
+        let forecast = forecast.borrow();
+        let Some(_forecast) = forecast.as_ref() else { return };
+
+        let color = Color { r: 0, g: 255, b: 0 };
+        matrix.fill(color);
     }
+}
+
+// ================================================================= 
+//    Background task                                              |
+// ================================================================= 
+
+/// Fetches the forecast forever, and publishes each new one to the state.
+///
+/// Runs beside the frame loop, so a slow network never freezes the display.
+async fn fetch_loop(client: Arc<Client>, url: String, forecast_tx: watch::Sender<Option<Forecast>>) {
+    loop {
+        // `timeout` gives up on a fetch that hangs (e.g. wifi lost during the request).
+        // It wraps the result in a second `Result`: the outer `Err` means "timed out".
+        let delay = match timeout(FETCH_TIMEOUT, fetch_forecast(&client, &url)).await {
+            Ok(Ok(forecast)) => {
+                forecast_tx.send_replace(Some(forecast));
+                REFRESH_PERIOD
+            }
+            /* On a failure the last known forecast is kept, and the fetch is retried sooner */
+            Ok(Err(e)) => {
+                error!("Failed to fetch weather data: {e:#}");
+                FETCH_RETRY_DELAY
+            }
+            Err(_) => {
+                error!("Failed to fetch weather data: timed out");
+                FETCH_RETRY_DELAY
+            }
+        };
+
+        sleep(delay).await;
+    }
+}
+
+/// Fetches the forecast of the day from the weather API
+async fn fetch_forecast(client: &Client, url: &str) -> Result<Forecast> {
+    // `?` returns the error to the caller (the task), which decides what to do with it
+    let data = get_weather(client, url).await?;
+
+    let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
+        error!("Failed to parse weather code: {e:#}");
+        "Unknown".to_string()
+    });
+    let forecast = Forecast {
+        summary,
+        temp_max:           data.apparent_temperature_max.to_string(),
+        temp_min:           data.apparent_temperature_min.to_string(),
+        precipitation_sum:  data.precipitation_sum.to_string(),
+    };
+
+    info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
+        forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
+
+    Ok(forecast)
 }
 
 // ================================================================= 
 //    Static functions                                             |
 // ================================================================= 
 
-/// Function that initializes the WeatherData struct
-fn init() -> Result<WeatherData> {
+/// Builds the full request URL sent to the weather API
+fn build_request_url() -> Result<String> {
     /* Create a JSON with the request parameters */
     let params = json!({
         "latitude": "43.57",
@@ -194,21 +199,16 @@ fn init() -> Result<WeatherData> {
     });
 
     /* Construct query params URL from the json */
-    let params_url = json_to_query_string(&params)?;
+    let params_url = json_to_query_string(&params)
+        .context("failed to build the weather request")?;
 
     /* Concatenate base URL and query params */
-    let full_url = format!("{}?{}", WEATHER_API_BASE_URL, params_url);
-
-    /* Return initialized WeatherData struct */
-    Ok(WeatherData {
-        request_url: full_url,
-        ..Default::default()            // use default values for other fields
-    })
+    Ok(format!("{}?{}", WEATHER_API_BASE_URL, params_url))
 }
 
 
 /// Function to get data from public weather API
-async fn get_weather(client: &Client, url: &String) -> Result<DailyData> {
+async fn get_weather(client: &Client, url: &str) -> Result<DailyData> {
     /* Send HTTP GET request */
     let response = client
         .get(url)
