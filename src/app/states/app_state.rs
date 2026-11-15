@@ -11,20 +11,38 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 /// First state on boot
-const START_STATE:AppStatesEnum = AppStatesEnum::Clock;
+const START_STATE:StateId = StateId::Clock;
 
 /// Config file path
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 const NB_STATES: u8 = 3;
 
-/// Panic message if the current state has no data. This can't happen: only enabled
-/// states are ever selected, and a state is only enabled if its data was created.
-const DATA: &str = "the current state is enabled, so it has data";
+// =================================================================
+//   Status part                                                   |
+// =================================================================
 
-// ================================================================= 
+/// Runtime status of a state: tells the app what it may do with it.
+///
+/// The config says what the user *wants* (`enabled`), the status says what is
+/// actually *happening*.
+// `Copy`: the enum is as cheap to copy as an integer, so it can be returned by value.
+// `PartialEq`/`Eq`: allow comparing two statuses with `==` and `!=`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Status {
+    /// Turned off in the config, or hit an unrecoverable error:
+    /// never fetched nor displayed.
+    Disabled,
+    /// Enabled, but nothing to display yet (e.g. no network at boot):
+    /// skipped, and fetched again on each rotation.
+    Waiting,
+    /// Has something to display.
+    Ready,
+}
+
+// =================================================================
 //   AppContext part                                               |
-// ================================================================= 
+// =================================================================
 
 /// Struct used to store context used by different states
 pub struct AppContext {
@@ -85,39 +103,25 @@ impl AppConfig {
 //    App part                                                     |
 // ================================================================= 
 
-/// Enum declaring state variants
-enum AppStatesEnum {
+/// Enum declaring state variants.
+///
+/// This is only a *tag* telling which state we are talking about (like an index
+/// in an array): the states themselves are stored in `AppStates`.
+// `Copy`: a tag is as cheap to copy as an integer, so it is passed by value.
+#[derive(Clone, Copy)]
+enum StateId {
     Clock,
     Weather,
     GTasks,
 }
 
-impl AppStatesEnum {
+impl StateId {
     /// Return the next state in the application cycle
-    pub fn next(&self) -> Self {
+    pub fn next(self) -> Self {
         match self {
-            AppStatesEnum::Clock   => AppStatesEnum::Weather,
-            AppStatesEnum::Weather => AppStatesEnum::GTasks,
-            AppStatesEnum::GTasks  => AppStatesEnum::Clock,
-        }
-    }
-
-    /// Return if state is enabled
-    pub fn is_enabled(&self, states: &AppStates) -> bool {
-        match self {
-            AppStatesEnum::Clock   => states.clock.config.is_enabled(),
-            AppStatesEnum::Weather => states.weather.config.is_enabled(),
-            AppStatesEnum::GTasks  => states.gtasks.config.is_enabled(),
-        }
-    }
-
-    /// Return if state has something to display. An enabled state can have no data
-    /// yet: its first fetch failed (e.g. no network at boot) and will be retried.
-    pub fn has_data(&self, states: &AppStates) -> bool {
-        match self {
-            AppStatesEnum::Clock   => states.clock.has_data(),
-            AppStatesEnum::Weather => states.weather.has_data(),
-            AppStatesEnum::GTasks  => states.gtasks.has_data(),
+            StateId::Clock   => StateId::Weather,
+            StateId::Weather => StateId::GTasks,
+            StateId::GTasks  => StateId::Clock,
         }
     }
 }
@@ -129,11 +133,22 @@ struct AppStates {
     gtasks:     GTasksState,
 }
 
+impl AppStates {
+    /// Return the runtime status of the given state
+    fn status_of(&self, state: StateId) -> Status {
+        match state {
+            StateId::Clock   => self.clock.status(),
+            StateId::Weather => self.weather.status(),
+            StateId::GTasks  => self.gtasks.status(),
+        }
+    }
+}
+
 /// App struct
 pub struct App {
     context:        AppContext,
     states:         AppStates,
-    current_state:  AppStatesEnum,
+    current_state:  StateId,
     matrix:         Matrix,
 }
 
@@ -176,36 +191,37 @@ impl App {
 
     /// Call draw() method of corresponding state
     ///
-    /// Does nothing while the current state has no data, which only happens when no
-    /// state can be displayed at all (e.g. only the weather is enabled, and there
-    /// is no network since boot): the screen then stays as it is.
+    /// Does nothing while the current state isn't `Ready`, which only happens when
+    /// no state can be displayed at all (e.g. only the weather is enabled, and
+    /// there is no network since boot): the screen then stays as it is.
     pub fn draw(&mut self) {
-        if !self.current_state.has_data(&self.states) {
+        if self.states.status_of(self.current_state) != Status::Ready {
             return;
         }
 
         match &self.current_state {
-            AppStatesEnum::Clock    => self.states.clock.data.as_ref().expect(DATA).draw(&mut self.matrix),
-            AppStatesEnum::Weather  => self.states.weather.data.as_ref().expect(DATA).draw(&mut self.matrix),
-            AppStatesEnum::GTasks   => self.states.gtasks.data.as_ref().expect(DATA).draw(&mut self.matrix),
+            StateId::Clock    => self.states.clock.draw(&mut self.matrix),
+            StateId::Weather  => self.states.weather.draw(&mut self.matrix),
+            StateId::GTasks   => self.states.gtasks.draw(&mut self.matrix),
         }
 
         /* Display the frame the state just drew */
         self.matrix.show();
     }
 
-    /// Call fetch_data() method of corresponding state
-    pub async fn fetch_data(&mut self) {
-        match &mut self.current_state{
-            AppStatesEnum::Clock    => self.states.clock.data.as_mut().expect(DATA).fetch_data(),
-            AppStatesEnum::Weather  => self.states.weather.data.as_mut().expect(DATA).fetch_data(&self.context).await,
-            AppStatesEnum::GTasks   => self.states.gtasks.data.as_mut().expect(DATA).fetch_data(&self.context).await,
+    /// Call refresh() method of corresponding state.
+    /// Each state decides by itself if there is something to do (a disabled state does nothing).
+    async fn refresh(&mut self) {
+        match &self.current_state {
+            StateId::Clock    => self.states.clock.refresh(),
+            StateId::Weather  => self.states.weather.refresh(&self.context).await,
+            StateId::GTasks   => self.states.gtasks.refresh(&self.context).await,
         }
     }
 
-    /// Switch to the next state that has something to display, refreshing its data first.
+    /// Switch to the next state that is ready to be displayed, refreshing its data first.
     ///
-    /// A state with no data yet is skipped, and retried on the next rotation.
+    /// A state that isn't `Ready` after its refresh is skipped, and retried on the next rotation.
     /// If no state can be displayed, we end up back on the current one.
     pub async fn next_state(&mut self) {
         /* Iterate through the states until we find one to display */
@@ -213,48 +229,38 @@ impl App {
             /* Move to next state */
             self.current_state = self.current_state.next();
 
-            /* Disabled states are never fetched nor displayed */
-            if !self.current_state.is_enabled(&self.states) {
-                continue;
-            }
-
             /* Refresh its data right before displaying it (or retry if it never got any) */
-            self.fetch_data().await;
+            self.refresh().await;
 
             /* Stop searching as soon as we found a state to display */
-            if self.current_state.has_data(&self.states) {
+            if self.states.status_of(self.current_state) == Status::Ready {
                 break;
             }
         }
     }
 }
 
-// ================================================================= 
+// =================================================================
 //    Static functions                                             |
-// ================================================================= 
-fn select_first_state(states: &mut AppStates) -> AppStatesEnum {
-    let mut current_state = START_STATE;
-    let mut found_enabled = false;
+// =================================================================
+
+/// Returns the first state that isn't disabled, searching from `START_STATE`.
+/// If they are all disabled, the clock is enabled and used as a fallback.
+fn select_first_state(states: &mut AppStates) -> StateId {
+    let mut state = START_STATE;
 
     for _ in 0..NB_STATES {
-        /* Stop searching as soon as we found an enabled state */
-        if current_state.is_enabled(states) {
-            found_enabled = true;
-            break;
+        /* Stop searching as soon as we found a state that isn't disabled */
+        if states.status_of(state) != Status::Disabled {
+            return state;
         }
 
         /* Move to next state if the current was disabled */
-        current_state = current_state.next();
+        state = state.next();
     }
 
-    /* If no state is enabled, fall back to Clock state */
-    if !found_enabled {
-        warn!("All states were disabled in config! Falling back to Clock.");
-        states.clock.config.set_enabled(true);
-        // The clock was disabled at startup, so its data was never created
-        states.clock.data = Some(ClockData::new());
-        return AppStatesEnum::Clock;
-    }
-
-    current_state
+    /* No state is enabled: fall back to Clock state */
+    warn!("All states were disabled in config! Falling back to Clock.");
+    states.clock.enable();
+    StateId::Clock
 }

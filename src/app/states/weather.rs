@@ -1,7 +1,7 @@
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
-use crate::app::states::{app_state::AppContext};
+use crate::app::states::app_state::{AppContext, Status};
 use crate::app::matrix::{Color, Matrix};
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
@@ -26,10 +26,6 @@ impl Default for WeatherConfig {
 }
 
 impl WeatherConfig {
-    pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
-
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
@@ -54,8 +50,9 @@ struct Forecast {
 
 /// Public struct containing global weather state
 pub struct WeatherState {
-    pub data: Option<WeatherData>,
-    pub config: WeatherConfig,
+    status: Status,                 // what the app may do with this state
+    data:   Option<WeatherData>,    // `None` only when the state is `Disabled`
+    config: WeatherConfig,          // what the user asked for: never modified
 }
 
 
@@ -65,24 +62,18 @@ pub struct WeatherState {
 
 impl WeatherData {
 
-    /// WeatherData constructor
-    pub async fn new(context: &AppContext) -> Result<Self> {
-        /* Initialize some data in the struct */
-        let mut weather = init()
-            .context("Failed to initialize weather data")?;
-
-        /* Get data from the weather API. A failed fetch (e.g. no network at boot) is
-        logged by `fetch_data` and isn't fatal: the state has no data yet, so it isn't
-        displayed, and the next `fetch_data` will try again. */
-        weather.fetch_data(context).await;
-
-        Ok(weather)
+    /// WeatherData constructor: only prepares the request, nothing is fetched yet
+    ///
+    /// # Errors
+    /// If the request can't be built: this is unrecoverable.
+    pub fn new() -> Result<Self> {
+        init().context("Failed to initialize weather data")
     }
 
     /// Method for drawing data to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
         // `let ... else`: binds `forecast` if there is one, otherwise runs the `else` block.
-        // The app only draws states that have data, so this is just a safety net.
+        // The app only draws `Ready` states, so this is just a safety net.
         let Some(forecast) = &self.forecast else { return };
 
         info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
@@ -91,68 +82,89 @@ impl WeatherData {
         matrix.fill(color);
     }
 
-    /// Returns true once a forecast has been received (there is something to display)
-    pub fn has_data(&self) -> bool {
-        self.forecast.is_some()
-    }
-
     /// Method for fetching data from public API
-    pub async fn fetch_data(&mut self, context: &AppContext) {
+    ///
+    /// # Errors
+    /// If the forecast can't be fetched: the last known forecast (if any) is kept.
+    pub async fn fetch_data(&mut self, context: &AppContext) -> Result<()> {
         /* Get data from the weather API */
-        match get_weather(&context.client, &self.request_url).await {
-            Ok(data) => {
-                let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
-                    error!("Failed to parse weather code: {e:#}");
-                    "Unknown".to_string()
-                });
-                self.forecast = Some(Forecast {
-                    summary,
-                    temp_max:           data.apparent_temperature_max.to_string(),
-                    temp_min:           data.apparent_temperature_min.to_string(),
-                    precipitation_sum:  data.precipitation_sum.to_string(),
-                });
-            }
-            Err(e) => {
-                /* Handle the error: the last known forecast (if any) is kept */
-                error!("Failed to fetch weather data: {e:#}");
-            }
-        }
+        // `?` returns the error to the caller (the state), which decides what to do with it
+        let data = get_weather(&context.client, &self.request_url).await?;
+
+        let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
+            error!("Failed to parse weather code: {e:#}");
+            "Unknown".to_string()
+        });
+        self.forecast = Some(Forecast {
+            summary,
+            temp_max:           data.apparent_temperature_max.to_string(),
+            temp_min:           data.apparent_temperature_min.to_string(),
+            precipitation_sum:  data.precipitation_sum.to_string(),
+        });
+
+        Ok(())
     }
 }
 
 
 impl WeatherState { 
     /// WeatherState constructor
-    pub async fn new(mut config: WeatherConfig, context: &AppContext) -> Self {
-        /* 
-        * data is initialized only if the state is enabled
-        * If in the future WeatherData needs config, pass it &config
-        */
-        let mut data = None;
-        
-        if config.is_enabled() {
-            match WeatherData::new(context).await {
-                Ok(d) => {
-                    data = Some(d);
-                }
-                Err(e) => {
-                    error!("Failed to initialize Weather, automatically disabling state.\n{e:#}");
-                    config.set_enabled(false);
-                }
+    pub async fn new(config: WeatherConfig, context: &AppContext) -> Self {
+        /* The state starts disabled, and is only switched on if everything goes well */
+        let mut state = WeatherState {
+            status: Status::Disabled,
+            data: None,
+            config,
+        };
+
+        /* A state turned off in the config stays disabled: its data is never created */
+        if !state.config.is_enabled() {
+            return state;
+        }
+
+        /* If in the future WeatherData needs config, pass it &state.config */
+        match WeatherData::new() {
+            Ok(data) => {
+                state.data = Some(data);
+                state.status = Status::Waiting;
+
+                /* First fetch. If it fails (e.g. no network at boot), the state
+                stays `Waiting` and the fetch is retried on the next rotation. */
+                state.refresh(context).await;
+            }
+            Err(e) => {
+                /* Unrecoverable error: the state stays `Disabled` */
+                error!("Failed to initialize Weather, disabling state.\n{e:#}");
             }
         }
 
-        WeatherState {
-            data,
-            config
+        state
+    }
+
+    /// Returns the runtime status of the state
+    pub fn status(&self) -> Status {
+        self.status
+    }
+
+    /// Fetches the latest forecast, and updates the status accordingly.
+    /// Does nothing if the state is disabled.
+    pub async fn refresh(&mut self, context: &AppContext) {
+        // `let ... else`: a disabled state has no data, so there is nothing to refresh
+        let Some(data) = &mut self.data else { return };
+
+        match data.fetch_data(context).await {
+            Ok(()) => self.status = Status::Ready,
+            /* The status is kept as it is: a `Waiting` state will be retried,
+            a `Ready` state keeps displaying the last known forecast */
+            Err(e) => error!("Failed to fetch weather data: {e:#}"),
         }
     }
 
-    /// Returns true if the state has something to display: it is enabled (`data`
-    /// exists) and its data was fetched successfully at least once.
-    pub fn has_data(&self) -> bool {
-        // `is_some_and`: true only if the `Option` is `Some` AND the given method returns true
-        self.data.as_ref().is_some_and(WeatherData::has_data)
+    /// Method for drawing the state to the screen
+    pub fn draw(&self, matrix: &mut Matrix) {
+        if let Some(data) = &self.data {
+            data.draw(matrix);
+        }
     }
 }
 

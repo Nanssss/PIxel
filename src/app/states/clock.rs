@@ -2,6 +2,7 @@ use chrono::Local;
 use tracing::info;
 use serde::Deserialize;
 use crate::app::matrix::Matrix;
+use crate::app::states::app_state::Status;
 use embedded_graphics::{
     mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::Rgb888,
@@ -37,10 +38,6 @@ impl Default for ClockConfig {
 }
 
 impl ClockConfig {
-    pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
-    }
-
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
@@ -55,8 +52,11 @@ pub struct ClockData {
 
 /// Public struct containing global clock state
 pub struct ClockState {
-    pub data: Option<ClockData>,
-    pub config: ClockConfig,
+    status: Status,         // what the app may do with this state
+    // Unlike the other states, no `Option` here: the clock data is cheap
+    // and can't fail to be created, so it always exists (even when disabled)
+    data:   ClockData,
+    config: ClockConfig,    // what the user asked for: never modified
 }
 
 
@@ -100,23 +100,41 @@ impl ClockData {
 impl ClockState { 
     /// ClockState constructor
     pub fn new(config: ClockConfig) -> Self {
-        /* 
-        * data is initialized only if the state is enabled
-        * If in the future ClockData needs config, use ClockData::new(&config)
-        */
-        // `bool::then` returns Some(ClockData::new()) if enabled, None otherwise
-        let data = config.is_enabled().then(ClockData::new);
+        /* If in the future ClockData needs config, use ClockData::new(&config) */
+        let mut state = ClockState {
+            status: Status::Disabled,
+            data: ClockData::new(),
+            config,
+        };
 
-        ClockState {
-            data,
-            config
+        if state.config.is_enabled() {
+            state.enable();
+        }
+
+        state
+    }
+
+    /// Enables the state
+    /// The clock needs no network: it is ready as soon as it is enabled.
+    pub fn enable(&mut self) {
+        self.status = Status::Ready;
+    }
+
+    /// Returns the runtime status of the state
+    pub fn status(&self) -> Status {
+        self.status
+    }
+
+    /// Updates the date and time. Does nothing if the state is disabled.
+    pub fn refresh(&mut self) {
+        if self.status != Status::Disabled {
+            self.data.fetch_data();
         }
     }
 
-    /// Returns true if the state has something to display.
-    /// The clock needs no fetch: it has data as soon as it is enabled.
-    pub fn has_data(&self) -> bool {
-        self.data.is_some()
+    /// Method for drawing the state to the screen
+    pub fn draw(&self, matrix: &mut Matrix) {
+        self.data.draw(matrix);
     }
 }
 
