@@ -43,19 +43,12 @@ impl ClockConfig {
     }
 }
 
-/// Public struct containing clock data
-pub struct ClockData {
-    date: String,
-    time: String,
-}
-
-
 /// Public struct containing global clock state
+///
+/// Unlike the other states, the clock stores no data: the time is not fetched
+/// on a state change, it is read from the system clock on every frame (see `draw`).
 pub struct ClockState {
     status: Status,         // what the app may do with this state
-    // Unlike the other states, no `Option` here: the clock data is cheap
-    // and can't fail to be created, so it always exists (even when disabled)
-    data:   ClockData,
     config: ClockConfig,    // what the user asked for: never modified
 }
 
@@ -64,47 +57,11 @@ pub struct ClockState {
 //    Methods implementation                                       |
 // ================================================================= 
 
-impl ClockData {
-
-    /// ClockData constructor
-    pub fn new() -> Self {
-        let (date, time) = get_date_time();
-        ClockData {
-            date,
-            time
-        }
-    }
-
-    /// Method for drawing data to the screen
-    pub fn draw(&self, matrix: &mut Matrix) {
-        let screen = matrix.bounding_box();
-
-        // Drawing on the matrix can't fail (Error = Infallible), so `unwrap()` never panics
-        /* 1px red border around the whole panel */
-        screen.into_styled(BORDER_STYLE).draw(matrix).unwrap();
-
-        /* Time centered on the panel */
-        Text::with_text_style(&self.time, screen.center(), TIME_FONT, CENTERED).draw(matrix).unwrap();
-    }
-
-    /// Method for fetching data
-    pub fn fetch_data(&mut self) {
-        let (date, time) = get_date_time();
-        self.date = date;
-        self.time = time;
-
-        // Logged here rather than in `draw`, which runs on every frame
-        info!("[CLOCK] - Date: {}, Time: {}", self.date, self.time);
-    }
-}
-
 impl ClockState { 
     /// ClockState constructor
     pub fn new(config: ClockConfig) -> Self {
-        /* If in the future ClockData needs config, use ClockData::new(&config) */
         let mut state = ClockState {
             status: Status::Disabled,
-            data: ClockData::new(),
             config,
         };
 
@@ -126,28 +83,27 @@ impl ClockState {
         self.status
     }
 
-    /// Updates the date and time. Does nothing if the state is disabled.
-    pub fn refresh(&mut self) {
+    /// Called when the app switches to this state, like for the other states.
+    /// The clock has nothing to fetch: it only logs that it is displayed.
+    pub fn refresh(&self) {
         if self.status != Status::Disabled {
-            self.data.fetch_data();
+            info!("[CLOCK] - {}", Local::now().format("%Y-%m-%d %H:%M:%S"));
         }
     }
 
     /// Method for drawing the state to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
-        self.data.draw(matrix);
+        // The time of day is an input of the frame (like the elapsed time of an
+        // animation), not fetched data: reading the system clock is local and cheap.
+        let time = Local::now().format("%H:%M:%S").to_string();
+
+        let screen = matrix.bounding_box();
+
+        // Drawing on the matrix can't fail (Error = Infallible), so `unwrap()` never panics
+        /* 1px red border around the whole panel */
+        screen.into_styled(BORDER_STYLE).draw(matrix).unwrap();
+
+        /* Time centered on the panel */
+        Text::with_text_style(&time, screen.center(), TIME_FONT, CENTERED).draw(matrix).unwrap();
     }
-}
-
-// ================================================================= 
-//    Static functions                                             |
-// ================================================================= 
-
-fn get_date_time() -> (String, String) {
-    let now = Local::now();
-    
-    let time = now.format("%H:%M:%S").to_string();
-    let date = now.format("%Y-%m-%d").to_string();
-
-    (date, time)
 }
