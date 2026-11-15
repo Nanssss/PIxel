@@ -138,8 +138,12 @@ impl Fetcher for TasksFetcher {
 
     const REFRESH_PERIOD: Duration = Duration::from_secs(5 * 60);
 
+    /// Longer than the default: on the first run, the fetch waits for the Google
+    /// authorization to be completed in the browser.
+    const TIMEOUT: Duration = Duration::from_secs(120);
+
     /// Fetches the next tasks from the GCalendar API
-    async fn fetch(&self) -> Result<Vec<GTask>> {
+    async fn fetch(&mut self) -> Result<Vec<GTask>> {
         /* Get token from oauth2 function */
         let token = oauth2_get_google_token(&self.oauth2, GCALENDAR_SCOPES).await
             .context("failed to obtain oauth2 token")?;

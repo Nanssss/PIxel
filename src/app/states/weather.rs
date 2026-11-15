@@ -132,7 +132,7 @@ impl Fetcher for ForecastFetcher {
     const REFRESH_PERIOD: Duration = Duration::from_secs(15 * 60);
 
     /// Fetches the forecast of the day from the weather API
-    async fn fetch(&self) -> Result<Forecast> {
+    async fn fetch(&mut self) -> Result<Forecast> {
         // `?` returns the error to the caller (the task), which decides what to do with it
         let data = get_weather(&self.client, &self.url).await?;
 

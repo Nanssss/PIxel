@@ -1,14 +1,9 @@
 use std::sync::Arc;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::sync::watch;
 use tokio::time::{sleep, timeout, Duration};
 use tracing::error;
 use crate::app::states::app_state::Status;
-
-/// Time after which a fetch that hangs is abandoned.
-/// Deliberately long: nobody waits for it, and it leaves time to complete the
-/// Google authorization in the browser when it is requested (first run).
-const FETCH_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Wait before fetching again after a failed fetch (e.g. no network at boot)
 const FETCH_RETRY_DELAY: Duration = Duration::from_secs(30);
@@ -35,14 +30,24 @@ pub trait Fetcher: Send + 'static {
     /// How often the data is fetched
     const REFRESH_PERIOD: Duration;
 
+    /// Time after which a fetch that hangs is abandoned
+    // An associated const may have a *default value*: an implementation only
+    // declares it when it needs another one.
+    const TIMEOUT: Duration = Duration::from_secs(30);
+
     /// Fetches the data once.
     ///
     /// # Errors
     /// If the fetch failed: the task logs the error, and fetches again later.
-    // Implementations simply write `async fn fetch(&self) -> Result<Self::Data>`.
+    // Implementations simply write `async fn fetch(&mut self) -> Result<Self::Data>`.
     // It is spelled out here (an `async fn` is a function returning a `Future`) only
     // to add `+ Send`, which `tokio::spawn` requires and `async fn` can't express.
-    fn fetch(&self) -> impl Future<Output = Result<Self::Data>> + Send;
+    //
+    // `&mut self` rather than `&self`: the task is the only owner of the fetcher, so
+    // exclusive access costs nothing, and lets a fetcher keep some state between two
+    // fetches. It also asks less of the fetcher: a future holding a `&mut F` is `Send`
+    // as soon as `F` is `Send`, while one holding a `&F` would need `F` to be `Sync` too.
+    fn fetch(&mut self) -> impl Future<Output = Result<Self::Data>> + Send;
 }
 
 // =================================================================
@@ -115,30 +120,42 @@ impl<T> Feed<T> {
 //    Background task                                              |
 // =================================================================
 
-/// Fetches the data forever, and publishes each new value to the feed.
+/// Fetches the data and publishes each new value to the feed, until the feed is dropped.
 ///
 /// Runs beside the frame loop, so a slow network never freezes the display.
-async fn fetch_loop<F: Fetcher>(fetcher: F, tx: watch::Sender<Option<Arc<F::Data>>>) {
+// `mut fetcher`: the task owns the fetcher, and `fetch` borrows it mutably.
+async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Arc<F::Data>>>) {
     loop {
         // `timeout` gives up on a fetch that hangs (e.g. wifi lost during the request).
-        // It wraps the result in a second `Result`: the outer `Err` means "timed out".
-        let delay = match timeout(FETCH_TIMEOUT, fetcher.fetch()).await {
-            Ok(Ok(data)) => {
-                // `send_replace` (unlike `send`) never fails, even if the state is gone
+        // It wraps the result in a second `Result`, whose `Err` means "timed out":
+        // `context` turns that into an anyhow error like those of a fetch, and `flatten`
+        // merges the two levels (`Result<Result<T>>` -> `Result<T>`), so both failures
+        // are handled alike.
+        let result = timeout(F::TIMEOUT, fetcher.fetch())
+            .await
+            .context("timed out")
+            .flatten();
+
+        let delay = match result {
+            Ok(data) => {
+                // `send_replace` (unlike `send`) never fails, even if the feed is gone
                 tx.send_replace(Some(Arc::new(data)));
                 F::REFRESH_PERIOD
             }
             /* On a failure the last known data is kept, and the fetch is retried sooner */
-            Ok(Err(e)) => {
+            Err(e) => {
                 error!("Failed to fetch {}: {e:#}", F::NAME);
-                FETCH_RETRY_DELAY
-            }
-            Err(_) => {
-                error!("Failed to fetch {}: timed out", F::NAME);
                 FETCH_RETRY_DELAY
             }
         };
 
-        sleep(delay).await;
+        // Wait for the next fetch, but stop the task if the feed is dropped meanwhile.
+        // `select!` runs both futures at once, and executes the branch of the first
+        // one that completes (the other future is simply dropped).
+        tokio::select! {
+            _ = sleep(delay) => {}
+            /* `closed()` completes once every `Receiver` is dropped: nobody reads anymore */
+            _ = tx.closed() => return,
+        }
     }
 }
