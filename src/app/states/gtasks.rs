@@ -71,7 +71,7 @@ impl GTasksState {
     pub async fn new(config: GTasksConfig, context: &AppContext) -> Self {
         /* The state starts disabled, and is only switched on if everything goes well */
         let mut state = GTasksState {
-            tasks: Feed::Disabled,
+            tasks: Feed::disabled(),
             config,
         };
 

@@ -64,7 +64,7 @@ impl WeatherState {
     pub fn new(config: WeatherConfig, context: &AppContext) -> Self {
         /* The state starts disabled, and is only switched on if everything goes well */
         let mut state = WeatherState {
-            forecast: Feed::Disabled,
+            forecast: Feed::disabled(),
             config,
         };
 
