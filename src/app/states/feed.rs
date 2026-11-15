@@ -5,8 +5,9 @@ use tokio::time::{sleep, timeout, Duration};
 use tracing::error;
 use crate::app::states::app_state::Status;
 
-/// Wait before fetching again after a failed fetch (e.g. no network at boot)
-const FETCH_RETRY_DELAY: Duration = Duration::from_secs(30);
+/// Wait before fetching again after a first failed fetch (e.g. no network at boot).
+/// Doubled after each further failure in a row (see `fetch_loop`).
+const FIRST_RETRY_DELAY: Duration = Duration::from_secs(30);
 
 // =================================================================
 //    Fetcher part (what a state provides)                         |
@@ -125,6 +126,9 @@ impl<T> Feed<T> {
 /// Runs beside the frame loop, so a slow network never freezes the display.
 // `mut fetcher`: the task owns the fetcher, and `fetch` borrows it mutably.
 async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Arc<F::Data>>>) {
+    // Wait before the next retry: grows while the fetches keep failing (see below)
+    let mut retry_delay = FIRST_RETRY_DELAY;
+
     loop {
         // `timeout` gives up on a fetch that hangs (e.g. wifi lost during the request).
         // It wraps the result in a second `Result`, whose `Err` means "timed out":
@@ -140,12 +144,19 @@ async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Arc<F::
             Ok(data) => {
                 // `send_replace` (unlike `send`) never fails, even if the feed is gone
                 tx.send_replace(Some(Arc::new(data)));
+                retry_delay = FIRST_RETRY_DELAY;
                 F::REFRESH_PERIOD
             }
             /* On a failure the last known data is kept, and the fetch is retried sooner */
             Err(e) => {
-                error!("Failed to fetch {}: {e:#}", F::NAME);
-                FETCH_RETRY_DELAY
+                // Exponential backoff: 30 s, 1 min, 2 min... A long outage (network down
+                // for hours) then costs a few retries and log lines instead of thousands.
+                // Capped: retrying less often than a normal refresh would make no sense.
+                let delay = retry_delay.min(F::REFRESH_PERIOD);
+                retry_delay = delay * 2;
+
+                error!("Failed to fetch {}, retrying in {delay:?}: {e:#}", F::NAME);
+                delay
             }
         };
 
