@@ -190,24 +190,27 @@ impl App {
         }
     }
 
-    /// Call draw() method of corresponding state
+    /// Call draw() method of corresponding state, or blank the screen if that
+    /// state has nothing to display.
     ///
-    /// Does nothing while the current state isn't `Ready`, which only happens when
-    /// no state can be displayed at all (e.g. only the weather is enabled, and
-    /// there is no network since boot, or its data got too old): the screen then
-    /// stays as it is, still showing the last frame drawn.
+    /// The current state isn't `Ready` in two cases:
+    /// - its data just got too old: it is skipped at the next state switch;
+    /// - no state can be displayed at all (e.g. only the weather is enabled, and
+    ///   there is no network): this lasts until some data arrives.
+    ///
+    /// Blanking the screen avoids leaving outdated data on it in the meantime.
     pub fn draw(&mut self) {
-        if self.states.status_of(self.current_state) != Status::Ready {
-            return;
+        if self.states.status_of(self.current_state) == Status::Ready {
+            match self.current_state {
+                StateId::Clock    => self.states.clock.draw(&mut self.matrix),
+                StateId::Weather  => self.states.weather.draw(&mut self.matrix),
+                StateId::GTasks   => self.states.gtasks.draw(&mut self.matrix),
+            }
         }
 
-        match &self.current_state {
-            StateId::Clock    => self.states.clock.draw(&mut self.matrix),
-            StateId::Weather  => self.states.weather.draw(&mut self.matrix),
-            StateId::GTasks   => self.states.gtasks.draw(&mut self.matrix),
-        }
-
-        /* Display the frame the state just drew */
+        // Display the frame that was just drawn. If nothing was drawn, the frame is
+        // black: `show` clears the hidden buffer after each frame, so there is no
+        // need to fill it here.
         self.matrix.show();
     }
 
