@@ -131,6 +131,9 @@ impl Fetcher for ForecastFetcher {
     /// The forecast only changes a few times a day
     const REFRESH_PERIOD: Duration = Duration::from_secs(15 * 60);
 
+    /// A forecast of the day stays useful for a while, but not until the next day
+    const MAX_AGE: Duration = Duration::from_secs(2 * 60 * 60);
+
     /// Fetches the forecast of the day from the weather API
     async fn fetch(&mut self) -> Result<Forecast> {
         // `?` returns the error to the caller (the task), which decides what to do with it

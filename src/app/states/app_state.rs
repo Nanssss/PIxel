@@ -33,8 +33,9 @@ pub enum Status {
     /// Turned off in the config, or hit an unrecoverable error:
     /// never fetched nor displayed.
     Disabled,
-    /// Enabled, but nothing to display yet (e.g. no network at boot):
-    /// skipped until its background task gets some data.
+    /// Enabled, but nothing to display for now: no data yet (e.g. no network at
+    /// boot), or data that got too old (e.g. network lost for hours).
+    /// Skipped until its background task gets some fresh data.
     Waiting,
     /// Has something to display.
     Ready,
@@ -193,7 +194,8 @@ impl App {
     ///
     /// Does nothing while the current state isn't `Ready`, which only happens when
     /// no state can be displayed at all (e.g. only the weather is enabled, and
-    /// there is no network since boot): the screen then stays as it is.
+    /// there is no network since boot, or its data got too old): the screen then
+    /// stays as it is, still showing the last frame drawn.
     pub fn draw(&mut self) {
         if self.states.status_of(self.current_state) != Status::Ready {
             return;

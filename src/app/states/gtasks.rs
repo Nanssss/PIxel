@@ -138,6 +138,9 @@ impl Fetcher for TasksFetcher {
 
     const REFRESH_PERIOD: Duration = Duration::from_secs(5 * 60);
 
+    /// The tasks are the next ones to come: an old list may show tasks already over
+    const MAX_AGE: Duration = Duration::from_secs(60 * 60);
+
     /// Longer than the default: on the first run, the fetch waits for the Google
     /// authorization to be completed in the browser.
     const TIMEOUT: Duration = Duration::from_secs(120);

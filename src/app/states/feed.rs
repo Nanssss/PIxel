@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use anyhow::{Context, Result};
 use tokio::sync::watch;
-use tokio::time::{sleep, timeout, Duration};
+use tokio::time::{sleep, timeout, Duration, Instant};
 use tracing::error;
 use crate::app::states::app_state::Status;
 
@@ -30,6 +30,12 @@ pub trait Fetcher: Send + 'static {
 
     /// How often the data is fetched
     const REFRESH_PERIOD: Duration;
+
+    /// Age past which the data is too old to be displayed: the feed then goes back
+    /// to `Waiting` until a fetch succeeds again (e.g. after a long network outage).
+    ///
+    /// Must be longer than `REFRESH_PERIOD`, or the data would expire between two fetches.
+    const MAX_AGE: Duration;
 
     /// Time after which a fetch that hangs is abandoned
     // An associated const may have a *default value*: an implementation only
@@ -64,11 +70,29 @@ pub trait Fetcher: Send + 'static {
 pub enum Feed<T> {
     /// No task is running: the state is turned off in the config, or failed to start.
     Disabled,
-    /// A task is running: the channel holds `None` until its first successful fetch.
-    // A `watch` channel only keeps the last value sent, which is all a state needs:
-    // the task owns the `Sender`, the feed owns the `Receiver`.
-    // The value is behind an `Arc` so that `latest` can hand it out without copying it.
-    Active(watch::Receiver<Option<Arc<T>>>),
+    /// A task is running.
+    // A *struct variant*: its fields are named, like those of a struct.
+    Active {
+        /// What the task published: `None` until its first successful fetch.
+        // A `watch` channel only keeps the last value sent, which is all a state needs:
+        // the task owns the `Sender`, the feed owns the `Receiver`.
+        rx: watch::Receiver<Option<Fetched<T>>>,
+        /// Age past which the published data is no longer displayed (`Fetcher::MAX_AGE`)
+        max_age: Duration,
+    },
+}
+
+/// A value published by the background task, with the time it was fetched at.
+// `pub` only because it appears in the public `Feed::Active` variant (the fields of
+// an enum variant are always as visible as the enum). Its own fields stay private,
+// so nothing outside this module can read or build one.
+pub struct Fetched<T> {
+    /// Behind an `Arc` so that `Feed::latest` can hand it out without copying it
+    data: Arc<T>,
+    /// When the fetch succeeded: tells how old the data is
+    // An `Instant` is a *monotonic* clock: unlike the time of day, it never jumps
+    // when the system clock is adjusted (e.g. the NTP sync of the Pi after boot).
+    fetched_at: Instant,
 }
 
 impl<T> Feed<T> {
@@ -91,28 +115,36 @@ impl<T> Feed<T> {
         // The task takes ownership of the fetcher and of the sending side of the channel.
         tokio::spawn(fetch_loop(fetcher, tx));
 
-        Feed::Active(rx)
+        Feed::Active { rx, max_age: F::MAX_AGE }
     }
 
     /// Returns the runtime status of the feed, deduced from what the task published so far
+    // Built on `latest`, so that both always agree on what "something to display" means.
     pub fn status(&self) -> Status {
         match self {
             Feed::Disabled => Status::Disabled,
-            // `borrow()` reads the latest value without waiting
-            Feed::Active(rx) if rx.borrow().is_some() => Status::Ready,
-            Feed::Active(_) => Status::Waiting,
+            // `{ .. }` ignores the fields of the variant
+            Feed::Active { .. } if self.latest().is_some() => Status::Ready,
+            Feed::Active { .. } => Status::Waiting,
         }
     }
 
     /// Returns the latest published value, or `None` if there is nothing to display
-    /// (feed disabled, or nothing fetched yet).
+    /// (feed disabled, nothing fetched yet, or data older than the maximum age).
+    ///
+    /// The age is checked here, when the data is read, rather than by the task:
+    /// the data then expires even if the task is stuck or has died.
     // Cloning an `Arc` only increments a counter: the data itself is never copied.
     // The lock taken by `borrow()` is released at the end of the statement, so the
     // caller can keep the value as long as it wants without blocking the task.
     pub fn latest(&self) -> Option<Arc<T>> {
         match self {
             Feed::Disabled => None,
-            Feed::Active(rx) => rx.borrow().clone(),
+            Feed::Active { rx, max_age } => rx
+                .borrow()           // reads the latest value without waiting
+                .as_ref()           // `&Option<Fetched<T>>` -> `Option<&Fetched<T>>`
+                .filter(|fetched| fetched.fetched_at.elapsed() <= *max_age)
+                .map(|fetched| Arc::clone(&fetched.data)),
         }
     }
 }
@@ -125,7 +157,7 @@ impl<T> Feed<T> {
 ///
 /// Runs beside the frame loop, so a slow network never freezes the display.
 // `mut fetcher`: the task owns the fetcher, and `fetch` borrows it mutably.
-async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Arc<F::Data>>>) {
+async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Fetched<F::Data>>>) {
     // Wait before the next retry: grows while the fetches keep failing (see below)
     let mut retry_delay = FIRST_RETRY_DELAY;
 
@@ -143,11 +175,15 @@ async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Arc<F::
         let delay = match result {
             Ok(data) => {
                 // `send_replace` (unlike `send`) never fails, even if the feed is gone
-                tx.send_replace(Some(Arc::new(data)));
+                tx.send_replace(Some(Fetched {
+                    data: Arc::new(data),
+                    fetched_at: Instant::now(),
+                }));
                 retry_delay = FIRST_RETRY_DELAY;
                 F::REFRESH_PERIOD
             }
-            /* On a failure the last known data is kept, and the fetch is retried sooner */
+            // On a failure the last known data is kept (it stays displayed until it gets
+            // older than `MAX_AGE`), and the fetch is retried sooner
             Err(e) => {
                 // Exponential backoff: 30 s, 1 min, 2 min... A long outage (network down
                 // for hours) then costs a few retries and log lines instead of thousands.
