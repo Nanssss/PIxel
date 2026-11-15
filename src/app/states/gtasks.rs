@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use crate::app::states::app_state::{AppContext, Status, FETCH_RETRY_DELAY, FETCH_TIMEOUT};
+use crate::app::states::feed::{Feed, FeedPublisher};
 use crate::app::dep::oauth2::*;
 use crate::app::matrix::{Color, Matrix};
 use reqwest::Client;
-use tokio::sync::watch;
 use tokio::time::{sleep, timeout, Duration};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
 use serde::Deserialize;
@@ -55,12 +55,8 @@ struct GTask {
 /// The state never fetches anything itself: a background task (`fetch_loop`) does,
 /// and the state only reads the latest tasks it published.
 pub struct GTasksState {
-    /// Latest tasks published by the background task.
-    /// - outer `Option`: `None` when the state is disabled (no task is running),
-    /// - inner `Option`: `None` until the first successful fetch (then `Some(vec![])` if there is no task).
-    // A `watch` channel only keeps the last value sent: the task owns the `Sender`,
-    // the state owns the `Receiver`.
-    tasks:  Option<watch::Receiver<Option<Vec<GTask>>>>,
+    /// Latest tasks published by the background task (an empty `Vec` if there is no task)
+    tasks:  Feed<Vec<GTask>>,
     config: GTasksConfig,           // what the user asked for: never modified
 }
 
@@ -77,7 +73,7 @@ impl GTasksState {
     pub async fn new(config: GTasksConfig, context: &AppContext) -> Self {
         /* The state starts disabled, and is only switched on if everything goes well */
         let mut state = GTasksState {
-            tasks: None,
+            tasks: Feed::Disabled,
             config,
         };
 
@@ -89,13 +85,14 @@ impl GTasksState {
         /* If in the future the request needs config, pass it &state.config */
         match oauth2_get_google_authenticator().await {
             Ok(oauth2) => {
-                let (tasks_tx, tasks_rx) = watch::channel(None);
+                // The task gets the writing side of the feed, the state keeps the reading side
+                let (publisher, feed) = Feed::channel();
 
                 // `tokio::spawn` starts the task and returns immediately. The task must own
                 // everything it uses: `Arc::clone` only copies a pointer to the shared client.
-                tokio::spawn(fetch_loop(Arc::clone(&context.client), oauth2, tasks_tx));
+                tokio::spawn(fetch_loop(Arc::clone(&context.client), oauth2, publisher));
 
-                state.tasks = Some(tasks_rx);
+                state.tasks = feed;
             }
             Err(e) => {
                 /* Unrecoverable error: the state stays `Disabled` */
@@ -108,22 +105,13 @@ impl GTasksState {
 
     /// Returns the runtime status of the state, deduced from what the task published so far
     pub fn status(&self) -> Status {
-        match &self.tasks {
-            None => Status::Disabled,
-            // `borrow()` reads the latest value without waiting
-            Some(tasks) if tasks.borrow().is_some() => Status::Ready,
-            Some(_) => Status::Waiting,
-        }
+        self.tasks.status()
     }
 
     /// Method for drawing the state to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
-        let Some(tasks) = &self.tasks else { return };
-
-        // `borrow()` locks the value while `tasks` is alive: fine here, `draw` is short
-        // and never awaits. The app only draws `Ready` states, so the `else` is a safety net.
-        let tasks = tasks.borrow();
-        let Some(_tasks) = tasks.as_ref() else { return };
+        // The app only draws `Ready` states, so the `else` is a safety net
+        let Some(_tasks) = self.tasks.latest() else { return };
 
         let color = Color { r: 0, g: 0, b: 255 };
         matrix.fill(color);
@@ -138,13 +126,13 @@ impl GTasksState {
 /// Fetches the tasks forever, and publishes each new list to the state.
 ///
 /// Runs beside the frame loop, so a slow network never freezes the display.
-async fn fetch_loop(client: Arc<Client>, oauth2: OAuth2Data, tasks_tx: watch::Sender<Option<Vec<GTask>>>) {
+async fn fetch_loop(client: Arc<Client>, oauth2: OAuth2Data, publisher: FeedPublisher<Vec<GTask>>) {
     loop {
         // `timeout` gives up on a fetch that hangs (e.g. wifi lost during the request).
         // It wraps the result in a second `Result`: the outer `Err` means "timed out".
         let delay = match timeout(FETCH_TIMEOUT, fetch_tasks(&client, &oauth2)).await {
             Ok(Ok(tasks)) => {
-                tasks_tx.send_replace(Some(tasks));
+                publisher.publish(tasks);
                 REFRESH_PERIOD
             }
             /* On a failure the last known tasks are kept, and the fetch is retried sooner */

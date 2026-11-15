@@ -2,9 +2,9 @@ use std::sync::Arc;
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
-use tokio::sync::watch;
 use tokio::time::{sleep, timeout, Duration};
 use crate::app::states::app_state::{AppContext, Status, FETCH_RETRY_DELAY, FETCH_TIMEOUT};
+use crate::app::states::feed::{Feed, FeedPublisher};
 use crate::app::matrix::{Color, Matrix};
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
@@ -50,12 +50,7 @@ struct Forecast {
 /// The state never fetches anything itself: a background task (`fetch_loop`) does,
 /// and the state only reads the latest forecast it published.
 pub struct WeatherState {
-    /// Latest forecast published by the background task.
-    /// - outer `Option`: `None` when the state is disabled (no task is running),
-    /// - inner `Option`: `None` until the first successful fetch.
-    // A `watch` channel only keeps the last value sent: the task owns the `Sender`,
-    // the state owns the `Receiver`.
-    forecast:   Option<watch::Receiver<Option<Forecast>>>,
+    forecast:   Feed<Forecast>,     // latest forecast published by the background task
     config:     WeatherConfig,      // what the user asked for: never modified
 }
 
@@ -71,7 +66,7 @@ impl WeatherState {
     pub fn new(config: WeatherConfig, context: &AppContext) -> Self {
         /* The state starts disabled, and is only switched on if everything goes well */
         let mut state = WeatherState {
-            forecast: None,
+            forecast: Feed::Disabled,
             config,
         };
 
@@ -83,13 +78,14 @@ impl WeatherState {
         /* If in the future the request needs config, pass it &state.config */
         match build_request_url() {
             Ok(url) => {
-                let (forecast_tx, forecast_rx) = watch::channel(None);
+                // The task gets the writing side of the feed, the state keeps the reading side
+                let (publisher, feed) = Feed::channel();
 
                 // `tokio::spawn` starts the task and returns immediately. The task must own
                 // everything it uses: `Arc::clone` only copies a pointer to the shared client.
-                tokio::spawn(fetch_loop(Arc::clone(&context.client), url, forecast_tx));
+                tokio::spawn(fetch_loop(Arc::clone(&context.client), url, publisher));
 
-                state.forecast = Some(forecast_rx);
+                state.forecast = feed;
             }
             Err(e) => {
                 /* Unrecoverable error: the state stays `Disabled` */
@@ -102,22 +98,13 @@ impl WeatherState {
 
     /// Returns the runtime status of the state, deduced from what the task published so far
     pub fn status(&self) -> Status {
-        match &self.forecast {
-            None => Status::Disabled,
-            // `borrow()` reads the latest value without waiting
-            Some(forecast) if forecast.borrow().is_some() => Status::Ready,
-            Some(_) => Status::Waiting,
-        }
+        self.forecast.status()
     }
 
     /// Method for drawing the state to the screen
     pub fn draw(&self, matrix: &mut Matrix) {
-        let Some(forecast) = &self.forecast else { return };
-
-        // `borrow()` locks the value while `forecast` is alive: fine here, `draw` is short
-        // and never awaits. The app only draws `Ready` states, so the `else` is a safety net.
-        let forecast = forecast.borrow();
-        let Some(_forecast) = forecast.as_ref() else { return };
+        // The app only draws `Ready` states, so the `else` is a safety net
+        let Some(_forecast) = self.forecast.latest() else { return };
 
         let color = Color { r: 0, g: 255, b: 0 };
         matrix.fill(color);
@@ -131,13 +118,13 @@ impl WeatherState {
 /// Fetches the forecast forever, and publishes each new one to the state.
 ///
 /// Runs beside the frame loop, so a slow network never freezes the display.
-async fn fetch_loop(client: Arc<Client>, url: String, forecast_tx: watch::Sender<Option<Forecast>>) {
+async fn fetch_loop(client: Arc<Client>, url: String, publisher: FeedPublisher<Forecast>) {
     loop {
         // `timeout` gives up on a fetch that hangs (e.g. wifi lost during the request).
         // It wraps the result in a second `Result`: the outer `Err` means "timed out".
         let delay = match timeout(FETCH_TIMEOUT, fetch_forecast(&client, &url)).await {
             Ok(Ok(forecast)) => {
-                forecast_tx.send_replace(Some(forecast));
+                publisher.publish(forecast);
                 REFRESH_PERIOD
             }
             /* On a failure the last known forecast is kept, and the fetch is retried sooner */
