@@ -1,9 +1,7 @@
-use std::sync::Arc;
-use crate::app::states::State;
-use crate::app::states::app_state::AppContext;
-use crate::app::states::feed::{Feed, Fetcher};
-use crate::app::dep::oauth2::*;
-use crate::app::matrix::{Color, Matrix};
+use crate::states::{AppContext, State};
+use crate::states::feed::{Feed, Fetcher};
+use crate::google_auth::GoogleAuth;
+use crate::matrix::{Color, Matrix};
 use reqwest::Client;
 use tokio::time::Duration;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
@@ -78,15 +76,15 @@ impl GTasksState {
         /* If in the future the request needs config, pass it &config */
         // `inspect_err` logs the error without consuming it, `ok()` turns the `Result`
         // into an `Option`, and `?` returns `None` right away if there is no value.
-        let oauth2 = oauth2_get_google_authenticator().await
-            .inspect_err(|e| error!("Failed to initialize OAuth2 authenticator, disabling GTasks state: {e:#}"))
+        let auth = GoogleAuth::new().await
+            .inspect_err(|e| error!("Failed to initialize Google authentication, disabling GTasks state: {e:#}"))
             .ok()?;
 
-        // The background task must own everything it uses:
-        // `Arc::clone` only copies a pointer to the shared client.
+        // The background task must own everything it uses: cloning the client
+        // only copies a handle, the connections stay shared (see `AppContext`).
         let fetcher = TasksFetcher {
-            client: Arc::clone(&context.client),
-            oauth2,
+            client: context.client.clone(),
+            auth,
         };
 
         /* Start the background task: returns immediately */
@@ -123,8 +121,8 @@ impl State for GTasksState {
 /// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
 /// lives longer than the function that started it, so it can't borrow anything.
 struct TasksFetcher {
-    client: Arc<Client>,    // HTTP client shared with the other states
-    oauth2: OAuth2Data,     // Google authenticator, prepared once at startup
+    client: Client,         // HTTP client shared with the other states
+    auth:   GoogleAuth,     // Google authentication, prepared once at startup
 }
 
 impl Fetcher for TasksFetcher {
@@ -143,9 +141,8 @@ impl Fetcher for TasksFetcher {
 
     /// Fetches the next tasks from the GCalendar API
     async fn fetch(&mut self) -> Result<Vec<GTask>> {
-        /* Get token from oauth2 function */
-        let token = oauth2_get_google_token(&self.oauth2, GCALENDAR_SCOPES).await
-            .context("failed to obtain oauth2 token")?;
+        /* Get the access token (from the cache, unless a new one is needed) */
+        let token = self.auth.token(GCALENDAR_SCOPES).await?;
 
         /* Request parameters */
         let query_params = &[

@@ -1,7 +1,7 @@
 use chrono::Local;
 use serde::Deserialize;
-use crate::app::matrix::Matrix;
-use crate::app::states::State;
+use crate::matrix::Matrix;
+use crate::states::State;
 use embedded_graphics::{
     mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::Rgb888,

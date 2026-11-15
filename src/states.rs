@@ -1,15 +1,18 @@
 //! The states of the app: what it can show on the matrix, one at a time, in rotation.
 //!
 //! Each state lives in its own module and implements the [`State`] trait below,
-//! which is all the app (see `app_state.rs`) knows about it.
+//! which is all the app (see `app.rs`) knows about it.
+//!
+//! `feed` is not a state: it is the background fetching shared by the states that
+//! get their data from the network.
 
-pub mod app_state;
 pub mod clock;
 pub mod feed;
-pub mod weather;
 pub mod gtasks;
+pub mod weather;
 
-use crate::app::matrix::Matrix;
+use reqwest::Client;
+use crate::matrix::Matrix;
 
 /// Something the app can show on the matrix (the clock, the weather...).
 ///
@@ -30,4 +33,23 @@ pub trait State {
     /// Only called when the state is ready, and must never wait (no network, no
     /// file): it runs in the frame loop.
     fn draw(&self, matrix: &mut Matrix);
+}
+
+/// What the app shares with its states while it builds them.
+pub struct AppContext {
+    /// HTTP client shared by every state that needs the network
+    // A reqwest `Client` is already a handle on a shared connection pool (an `Arc`
+    // inside): cloning it is cheap, and every clone reuses the same connections.
+    // Wrapping it in another `Arc` would add nothing.
+    pub client: Client,
+}
+
+/// Method implementations for AppContext
+impl AppContext {
+    /// AppContext constructor
+    pub fn new() -> Self {
+        AppContext {
+            client: Client::new(),
+        }
+    }
 }

@@ -7,7 +7,7 @@
 //!   when built with `--features simulator`.
 //!
 //! The public API is re-exported below, so the app only needs
-//! `use crate::app::matrix::{Matrix, Color};`.
+//! `use crate::matrix::{Matrix, Color};`.
 
 mod ffi;
 mod graphics;

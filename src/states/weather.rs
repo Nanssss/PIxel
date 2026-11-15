@@ -1,12 +1,10 @@
-use std::sync::Arc;
 use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
 use tokio::time::Duration;
-use crate::app::states::State;
-use crate::app::states::app_state::AppContext;
-use crate::app::states::feed::{Feed, Fetcher};
-use crate::app::matrix::{Color, Matrix};
+use crate::states::{AppContext, State};
+use crate::states::feed::{Feed, Fetcher};
+use crate::matrix::{Color, Matrix};
 use tracing::{trace, info, error};
 use anyhow::{Result, Context};
 
@@ -75,10 +73,10 @@ impl WeatherState {
             .inspect_err(|e| error!("Failed to initialize Weather, disabling state: {e:#}"))
             .ok()?;
 
-        // The background task must own everything it uses:
-        // `Arc::clone` only copies a pointer to the shared client.
+        // The background task must own everything it uses: cloning the client
+        // only copies a handle, the connections stay shared (see `AppContext`).
         let fetcher = ForecastFetcher {
-            client: Arc::clone(&context.client),
+            client: context.client.clone(),
             url,
         };
 
@@ -115,7 +113,7 @@ impl State for WeatherState {
 /// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
 /// lives longer than the function that started it, so it can't borrow anything.
 struct ForecastFetcher {
-    client: Arc<Client>,    // HTTP client shared with the other states
+    client: Client,         // HTTP client shared with the other states
     url:    String,         // full request URL, built once at startup
 }
 

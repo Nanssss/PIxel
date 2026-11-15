@@ -1,27 +1,14 @@
-mod app; // Include ./app.rs
-use app::app_main;
+mod app;
+mod config;
+mod google_auth;
+mod matrix;
+mod states;
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::{EnvFilter, LevelFilter}};
 use tracing_appender::{rolling, non_blocking::WorkerGuard};
 use std::sync::{OnceLock, LazyLock};
 use std::path::PathBuf;
 use tracing::info;
-
-/* Notes:
-    cargo add serde --features derive
-    cargo add serde_json
-    cargo add tokio --features full
-    cargo add reqwest --features json, blocking
-    cargo add yup-oauth2
-    cargo add hyper_util
-    cargo add tracing
-    cargo add tracing-subscriber --features env-filter json
-    cargo add tracing-appender
-    cargo add anyhow
-    cargo add toml
-    cargo add bindgen
-    cargo add embedded-graphics
-*/
 
 /* Constants */
 const APP_NAME:&str = "PIxel";
@@ -45,7 +32,7 @@ async fn main() {
     init_logging();
 
     info!("Starting PIxel...");
-    app_main::app_main().await;
+    app::run().await;
 }
 
 // ================================================================= 
