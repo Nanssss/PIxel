@@ -3,7 +3,8 @@ use serde_json::json;
 use serde::{Deserialize, Deserializer};
 use reqwest::Client;
 use tokio::time::Duration;
-use crate::app::states::app_state::{AppContext, Status};
+use crate::app::states::State;
+use crate::app::states::app_state::AppContext;
 use crate::app::states::feed::{Feed, Fetcher};
 use crate::app::matrix::{Color, Matrix};
 use tracing::{trace, info, error};
@@ -49,7 +50,6 @@ struct Forecast {
 /// and the state only reads the latest forecast it published.
 pub struct WeatherState {
     forecast:   Feed<Forecast>,     // latest forecast published by the background task
-    config:     WeatherConfig,      // what the user asked for: never modified
 }
 
 
@@ -60,49 +60,45 @@ pub struct WeatherState {
 impl WeatherState { 
     /// WeatherState constructor: starts the background task fetching the forecast.
     ///
-    /// Nothing is fetched here: the state is `Waiting` until the first forecast arrives.
-    pub fn new(config: WeatherConfig, context: &AppContext) -> Self {
-        /* The state starts disabled, and is only switched on if everything goes well */
-        let mut state = WeatherState {
-            forecast: Feed::disabled(),
-            config,
+    /// Returns `None` if the state is turned off in the config, or failed to start.
+    /// Nothing is fetched here: the state isn't ready until the first forecast arrives.
+    pub fn new(config: WeatherConfig, context: &AppContext) -> Option<Self> {
+        /* A state turned off in the config is never built: its task is never started */
+        if !config.is_enabled() {
+            return None;
+        }
+
+        /* If in the future the request needs config, pass it &config */
+        // `inspect_err` logs the error without consuming it, `ok()` turns the `Result`
+        // into an `Option`, and `?` returns `None` right away if there is no value.
+        let url = build_request_url()
+            .inspect_err(|e| error!("Failed to initialize Weather, disabling state: {e:#}"))
+            .ok()?;
+
+        // The background task must own everything it uses:
+        // `Arc::clone` only copies a pointer to the shared client.
+        let fetcher = ForecastFetcher {
+            client: Arc::clone(&context.client),
+            url,
         };
 
-        /* A state turned off in the config stays disabled: its task is never started */
-        if !state.config.is_enabled() {
-            return state;
-        }
-
-        /* If in the future the request needs config, pass it &state.config */
-        match build_request_url() {
-            Ok(url) => {
-                // The background task must own everything it uses:
-                // `Arc::clone` only copies a pointer to the shared client.
-                let fetcher = ForecastFetcher {
-                    client: Arc::clone(&context.client),
-                    url,
-                };
-
-                /* Start the background task: returns immediately */
-                state.forecast = Feed::spawn(fetcher);
-            }
-            Err(e) => {
-                /* Unrecoverable error: the state stays `Disabled` */
-                error!("Failed to initialize Weather, disabling state.\n{e:#}");
-            }
-        }
-
-        state
+        /* Start the background task: returns immediately */
+        Some(WeatherState {
+            forecast: Feed::spawn(fetcher),
+        })
     }
+}
 
-    /// Returns the runtime status of the state, deduced from what the task published so far
-    pub fn status(&self) -> Status {
-        self.forecast.status()
+impl State for WeatherState {
+    /// Ready as soon as the background task published a forecast that is still fresh
+    fn is_ready(&self) -> bool {
+        self.forecast.latest().is_some()
     }
 
     /// Method for drawing the state to the screen
-    pub fn draw(&self, matrix: &mut Matrix) {
-        // The app only draws `Ready` states, so the `else` is a safety net
+    fn draw(&self, matrix: &mut Matrix) {
+        // The app only draws a state that is ready, so the `else` is a safety net
+        // (the forecast may expire right between the two calls)
         let Some(_forecast) = self.forecast.latest() else { return };
 
         let color = Color { r: 0, g: 255, b: 0 };

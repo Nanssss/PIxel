@@ -1,5 +1,6 @@
 use std::sync::Arc;
-use crate::app::states::app_state::{AppContext, Status};
+use crate::app::states::State;
+use crate::app::states::app_state::AppContext;
 use crate::app::states::feed::{Feed, Fetcher};
 use crate::app::dep::oauth2::*;
 use crate::app::matrix::{Color, Matrix};
@@ -55,7 +56,6 @@ struct GTask {
 pub struct GTasksState {
     /// Latest tasks published by the background task (an empty `Vec` if there is no task)
     tasks:  Feed<Vec<GTask>>,
-    config: GTasksConfig,           // what the user asked for: never modified
 }
 
 
@@ -66,50 +66,46 @@ pub struct GTasksState {
 impl GTasksState {
     /// GTasksState constructor: starts the background task fetching the tasks.
     ///
+    /// Returns `None` if the state is turned off in the config, or failed to start.
     /// Only the OAuth2 authenticator is prepared here (it reads local files). Nothing
-    /// is fetched: the state is `Waiting` until the first tasks arrive.
-    pub async fn new(config: GTasksConfig, context: &AppContext) -> Self {
-        /* The state starts disabled, and is only switched on if everything goes well */
-        let mut state = GTasksState {
-            tasks: Feed::disabled(),
-            config,
+    /// is fetched: the state isn't ready until the first tasks arrive.
+    pub async fn new(config: GTasksConfig, context: &AppContext) -> Option<Self> {
+        /* A state turned off in the config is never built: its task is never started */
+        if !config.is_enabled() {
+            return None;
+        }
+
+        /* If in the future the request needs config, pass it &config */
+        // `inspect_err` logs the error without consuming it, `ok()` turns the `Result`
+        // into an `Option`, and `?` returns `None` right away if there is no value.
+        let oauth2 = oauth2_get_google_authenticator().await
+            .inspect_err(|e| error!("Failed to initialize OAuth2 authenticator, disabling GTasks state: {e:#}"))
+            .ok()?;
+
+        // The background task must own everything it uses:
+        // `Arc::clone` only copies a pointer to the shared client.
+        let fetcher = TasksFetcher {
+            client: Arc::clone(&context.client),
+            oauth2,
         };
 
-        /* A state turned off in the config stays disabled: its task is never started */
-        if !state.config.is_enabled() {
-            return state;
-        }
-
-        /* If in the future the request needs config, pass it &state.config */
-        match oauth2_get_google_authenticator().await {
-            Ok(oauth2) => {
-                // The background task must own everything it uses:
-                // `Arc::clone` only copies a pointer to the shared client.
-                let fetcher = TasksFetcher {
-                    client: Arc::clone(&context.client),
-                    oauth2,
-                };
-
-                /* Start the background task: returns immediately */
-                state.tasks = Feed::spawn(fetcher);
-            }
-            Err(e) => {
-                /* Unrecoverable error: the state stays `Disabled` */
-                error!("Failed to initialize OAuth2 authenticator, disabling GTasks state.\n{e:#}");
-            }
-        }
-
-        state
+        /* Start the background task: returns immediately */
+        Some(GTasksState {
+            tasks: Feed::spawn(fetcher),
+        })
     }
+}
 
-    /// Returns the runtime status of the state, deduced from what the task published so far
-    pub fn status(&self) -> Status {
-        self.tasks.status()
+impl State for GTasksState {
+    /// Ready as soon as the background task published a list of tasks that is still fresh
+    fn is_ready(&self) -> bool {
+        self.tasks.latest().is_some()
     }
 
     /// Method for drawing the state to the screen
-    pub fn draw(&self, matrix: &mut Matrix) {
-        // The app only draws `Ready` states, so the `else` is a safety net
+    fn draw(&self, matrix: &mut Matrix) {
+        // The app only draws a state that is ready, so the `else` is a safety net
+        // (the tasks may expire right between the two calls)
         let Some(_tasks) = self.tasks.latest() else { return };
 
         let color = Color { r: 0, g: 0, b: 255 };

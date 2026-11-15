@@ -3,7 +3,6 @@ use anyhow::{Context, Result};
 use tokio::sync::watch;
 use tokio::time::{sleep, timeout, Duration, Instant};
 use tracing::error;
-use crate::app::states::app_state::Status;
 
 /// Wait before fetching again after a first failed fetch (e.g. no network at boot).
 /// Doubled after each further failure in a row (see `fetch_loop`).
@@ -31,8 +30,8 @@ pub trait Fetcher: Send + 'static {
     /// How often the data is fetched
     const REFRESH_PERIOD: Duration;
 
-    /// Age past which the data is too old to be displayed: the feed then goes back
-    /// to `Waiting` until a fetch succeeds again (e.g. after a long network outage).
+    /// Age past which the data is too old to be displayed: the feed then has nothing
+    /// to give until a fetch succeeds again (e.g. after a long network outage).
     ///
     /// Must be longer than `REFRESH_PERIOD`, or the data would expire between two fetches.
     const MAX_AGE: Duration;
@@ -68,17 +67,10 @@ pub trait Fetcher: Send + 'static {
 // Generic over `T`, the type of the published data: the code is written once, and
 // the compiler generates a version for each `T` used.
 //
-// Its field is private: a feed can only be built by `Feed::disabled` and `Feed::spawn`,
-// and read through `status` and `latest`. How it works inside (the channel, the
-// types below) can then change without touching any state.
+// Its fields are private: a feed can only be built by `Feed::spawn`, and read
+// through `latest`. How it works inside (the channel, the type below) can then
+// change without touching any state.
 pub struct Feed<T> {
-    /// Reading side of the running task, or `None` if no task is running
-    /// (the state is turned off in the config, or failed to start).
-    active: Option<Active<T>>,
-}
-
-/// Reading side of a running background task.
-struct Active<T> {
     /// What the task published: `None` until its first successful fetch.
     // A `watch` channel only keeps the last value sent, which is all a state needs:
     // the task owns the `Sender`, the feed owns the `Receiver`.
@@ -98,15 +90,10 @@ struct Fetched<T> {
 }
 
 impl<T> Feed<T> {
-    /// Returns a feed without any background task: it stays `Disabled` forever.
-    pub fn disabled() -> Self {
-        Feed { active: None }
-    }
-
     /// Starts the background task fetching the data, and returns the feed to read it from.
     ///
-    /// Returns immediately, nothing is fetched here: the feed is `Waiting` until
-    /// the first successful fetch.
+    /// Returns immediately, nothing is fetched here: the feed has nothing to give
+    /// (see `latest`) until the first successful fetch.
     // `Fetcher<Data = T>`: any fetcher, as long as the data it fetches is the `T` of this feed.
     // The bounds on `T` repeat those of `Fetcher::Data`: the compiler doesn't deduce
     // them from `Data = T`, and the task needs them to share the data with the state.
@@ -122,23 +109,11 @@ impl<T> Feed<T> {
         // The task takes ownership of the fetcher and of the sending side of the channel.
         tokio::spawn(fetch_loop(fetcher, tx));
 
-        Feed {
-            active: Some(Active { rx, max_age: F::MAX_AGE }),
-        }
-    }
-
-    /// Returns the runtime status of the feed, deduced from what the task published so far
-    // Built on `latest`, so that both always agree on what "something to display" means.
-    pub fn status(&self) -> Status {
-        match &self.active {
-            None => Status::Disabled,
-            Some(_) if self.latest().is_some() => Status::Ready,
-            Some(_) => Status::Waiting,
-        }
+        Feed { rx, max_age: F::MAX_AGE }
     }
 
     /// Returns the latest published value, or `None` if there is nothing to display
-    /// (feed disabled, nothing fetched yet, or data older than the maximum age).
+    /// (nothing fetched yet, or data older than the maximum age).
     ///
     /// The age is checked here, when the data is read, rather than by the task:
     /// the data then expires even if the task is stuck or has died.
@@ -146,13 +121,10 @@ impl<T> Feed<T> {
     // The lock taken by `borrow()` is released at the end of the statement, so the
     // caller can keep the value as long as it wants without blocking the task.
     pub fn latest(&self) -> Option<Arc<T>> {
-        // `?` also works on an `Option`: it returns `None` right away if no task is running
-        let active = self.active.as_ref()?;
-
-        active.rx
+        self.rx
             .borrow()           // reads the latest value without waiting
             .as_ref()           // `&Option<Fetched<T>>` -> `Option<&Fetched<T>>`
-            .filter(|fetched| fetched.fetched_at.elapsed() <= active.max_age)
+            .filter(|fetched| fetched.fetched_at.elapsed() <= self.max_age)
             .map(|fetched| Arc::clone(&fetched.data))
     }
 }

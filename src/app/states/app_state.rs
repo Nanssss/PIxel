@@ -1,5 +1,6 @@
 use crate::EXECUTABLE_DIR;
 use crate::app::matrix::Matrix;
+use crate::app::states::State;
 use crate::app::states::clock::*;
 use crate::app::states::weather::*;
 use crate::app::states::gtasks::*;
@@ -10,36 +11,8 @@ use tracing::{info, warn};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-/// First state on boot
-const START_STATE:StateId = StateId::Clock;
-
 /// Config file path
 const CONFIG_FILE_PATH: &str = "in/config.toml";
-
-const NB_STATES: u8 = 3;
-
-// =================================================================
-//   Status part                                                   |
-// =================================================================
-
-/// Runtime status of a state: tells the app what it may do with it.
-///
-/// The config says what the user *wants* (`enabled`), the status says what is
-/// actually *happening*.
-// `Copy`: the enum is as cheap to copy as an integer, so it can be returned by value.
-// `PartialEq`/`Eq`: allow comparing two statuses with `==` and `!=`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Status {
-    /// Turned off in the config, or hit an unrecoverable error:
-    /// never fetched nor displayed.
-    Disabled,
-    /// Enabled, but nothing to display for now: no data yet (e.g. no network at
-    /// boot), or data that got too old (e.g. network lost for hours).
-    /// Skipped until its background task gets some fresh data.
-    Waiting,
-    /// Has something to display.
-    Ready,
-}
 
 // =================================================================
 //   AppContext part                                               |
@@ -104,52 +77,15 @@ impl AppConfig {
 //    App part                                                     |
 // ================================================================= 
 
-/// Enum declaring state variants.
-///
-/// This is only a *tag* telling which state we are talking about (like an index
-/// in an array): the states themselves are stored in `AppStates`.
-// `Copy`: a tag is as cheap to copy as an integer, so it is passed by value.
-#[derive(Clone, Copy)]
-enum StateId {
-    Clock,
-    Weather,
-    GTasks,
-}
-
-impl StateId {
-    /// Return the next state in the application cycle
-    pub fn next(self) -> Self {
-        match self {
-            StateId::Clock   => StateId::Weather,
-            StateId::Weather => StateId::GTasks,
-            StateId::GTasks  => StateId::Clock,
-        }
-    }
-}
-
-/// Struct storing all states
-struct AppStates {
-    clock:      ClockState,
-    weather:    WeatherState,
-    gtasks:     GTasksState,
-}
-
-impl AppStates {
-    /// Return the runtime status of the given state
-    fn status_of(&self, state: StateId) -> Status {
-        match state {
-            StateId::Clock   => self.clock.status(),
-            StateId::Weather => self.weather.status(),
-            StateId::GTasks  => self.gtasks.status(),
-        }
-    }
-}
-
 /// App struct
 pub struct App {
-    states:         AppStates,
-    current_state:  StateId,
-    matrix:         Matrix,
+    /// States of the rotation, in display order. Never empty (see `build_states`).
+    // A `Vec` can only hold values of a single type: `Box<dyn State>` is that type,
+    // a pointer to "some state", whatever its concrete type is.
+    states:     Vec<Box<dyn State>>,
+    /// Index in `states` of the state currently on screen
+    current:    usize,
+    matrix:     Matrix,
 }
 
 /// App methods implementation
@@ -162,50 +98,39 @@ impl App {
 
         /* Build context */
         // Only needed while the states are built: each background task keeps its own handle on it
-        let context =   AppContext::new();
+        let context = AppContext::new();
 
         /* Build states */
-        // Each state takes ownership of its own part of the config (no clone needed).
         // States that need the network start their background fetch task here.
-        let clock =     ClockState::new(config.clock);
-        let weather =   WeatherState::new(config.weather, &context);
-        let gtasks =    GTasksState::new(config.gtasks, &context).await;
-        let mut states = AppStates {
-            clock,
-            weather,
-            gtasks,
-        };
-
-        /* Get current state */
-        let current_state = select_first_state(&mut states);
+        let states = build_states(config, &context).await;
 
         /* Build matrix */
         let matrix = Matrix::new();
 
-        /* Return constructed App */
-        App { 
+        /* Return constructed App, starting on the first state of the rotation */
+        App {
             states,
-            current_state,
+            current: 0,
             matrix,
         }
     }
 
-    /// Call draw() method of corresponding state, or blank the screen if that
+    /// Call draw() method of the current state, or blank the screen if that
     /// state has nothing to display.
     ///
-    /// The current state isn't `Ready` in two cases:
+    /// The current state isn't ready in two cases:
     /// - its data just got too old: it is skipped at the next state switch;
     /// - no state can be displayed at all (e.g. only the weather is enabled, and
     ///   there is no network): this lasts until some data arrives.
     ///
     /// Blanking the screen avoids leaving outdated data on it in the meantime.
     pub fn draw(&mut self) {
-        if self.states.status_of(self.current_state) == Status::Ready {
-            match self.current_state {
-                StateId::Clock    => self.states.clock.draw(&mut self.matrix),
-                StateId::Weather  => self.states.weather.draw(&mut self.matrix),
-                StateId::GTasks   => self.states.gtasks.draw(&mut self.matrix),
-            }
+        // Borrows `self.states` only: `self.matrix` can still be borrowed mutably
+        // below, as the compiler tracks the borrow of each field separately.
+        let state = &self.states[self.current];
+
+        if state.is_ready() {
+            state.draw(&mut self.matrix);
         }
 
         // Display the frame that was just drawn. If nothing was drawn, the frame is
@@ -217,18 +142,20 @@ impl App {
     /// Switch to the next state that is ready to be displayed.
     ///
     /// Never waits: the data is fetched by the background task of each state. A state
-    /// that isn't `Ready` is skipped, and gets its chance again on the next rotation.
-    /// If no other state can be displayed, we end up back on the current one.
+    /// that isn't ready is skipped, and gets its chance again on the next rotation.
+    /// If no other state can be displayed, we stay on the current one.
     pub fn next_state(&mut self) {
-        /* Iterate through the states until we find one to display */
-        for _ in 0..NB_STATES {
-            /* Move to next state */
-            self.current_state = self.current_state.next();
+        let count = self.states.len();
 
-            /* Stop searching as soon as we found a state to display */
-            if self.states.status_of(self.current_state) == Status::Ready {
-                break;
-            }
+        // Candidates, in order: every state after the current one, wrapping around
+        // at the end of the list (`% count`), and finally the current one itself.
+        let next = (1..=count)
+            .map(|offset| (self.current + offset) % count)
+            .find(|&index| self.states[index].is_ready());
+
+        /* No candidate is ready: keep the current state */
+        if let Some(index) = next {
+            self.current = index;
         }
     }
 }
@@ -237,23 +164,32 @@ impl App {
 //    Static functions                                             |
 // =================================================================
 
-/// Returns the first state that isn't disabled, searching from `START_STATE`.
-/// If they are all disabled, the clock is enabled and used as a fallback.
-fn select_first_state(states: &mut AppStates) -> StateId {
-    let mut state = START_STATE;
+/// Builds the states of the rotation, in display order: adding a state to the app
+/// only takes a new block here.
+///
+/// A state turned off in the config, or that failed to start, is left out. If none
+/// is left, the clock is used as a fallback: the returned list is never empty.
+async fn build_states(config: AppConfig, context: &AppContext) -> Vec<Box<dyn State>> {
+    // The type annotation matters: it makes each `Box::new(...)` below convert from
+    // a `Box<ClockState>` (or any other state) to a `Box<dyn State>`.
+    let mut states: Vec<Box<dyn State>> = Vec::new();
 
-    for _ in 0..NB_STATES {
-        /* Stop searching as soon as we found a state that isn't disabled */
-        if states.status_of(state) != Status::Disabled {
-            return state;
-        }
-
-        /* Move to next state if the current was disabled */
-        state = state.next();
+    // Each state takes ownership of its own part of the config (no clone needed)
+    if let Some(clock) = ClockState::new(config.clock) {
+        states.push(Box::new(clock));
+    }
+    if let Some(weather) = WeatherState::new(config.weather, context) {
+        states.push(Box::new(weather));
+    }
+    if let Some(gtasks) = GTasksState::new(config.gtasks, context).await {
+        states.push(Box::new(gtasks));
     }
 
-    /* No state is enabled: fall back to Clock state */
-    warn!("All states were disabled in config! Falling back to Clock.");
-    states.clock.enable();
-    StateId::Clock
+    /* No state is enabled: fall back to the clock, whatever the config says */
+    if states.is_empty() {
+        warn!("No state is enabled! Falling back to Clock.");
+        states.push(Box::new(ClockState));
+    }
+
+    states
 }

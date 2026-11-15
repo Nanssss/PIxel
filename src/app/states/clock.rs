@@ -1,7 +1,7 @@
 use chrono::Local;
 use serde::Deserialize;
 use crate::app::matrix::Matrix;
-use crate::app::states::app_state::Status;
+use crate::app::states::State;
 use embedded_graphics::{
     mono_font::{ascii::FONT_6X10, MonoTextStyle},
     pixelcolor::Rgb888,
@@ -45,45 +45,31 @@ impl ClockConfig {
 /// Public struct containing global clock state
 ///
 /// Unlike the other states, the clock stores no data: the time is not fetched
-/// on a state change, it is read from the system clock on every frame (see `draw`).
-pub struct ClockState {
-    status: Status,         // what the app may do with this state
-    config: ClockConfig,    // what the user asked for: never modified
-}
+/// in the background, it is read from the system clock on every frame (see `draw`).
+// A *unit struct*: a type without any field, only there to carry the `State` implementation.
+pub struct ClockState;
 
 
 // ================================================================= 
 //    Methods implementation                                       |
 // ================================================================= 
 
-impl ClockState { 
-    /// ClockState constructor
-    pub fn new(config: ClockConfig) -> Self {
-        let mut state = ClockState {
-            status: Status::Disabled,
-            config,
-        };
-
-        if state.config.is_enabled() {
-            state.enable();
-        }
-
-        state
+impl ClockState {
+    /// ClockState constructor: returns `None` if the clock is turned off in the config.
+    pub fn new(config: ClockConfig) -> Option<Self> {
+        // `then_some(value)` turns a `bool` into an `Option`: `Some(value)` if true, else `None`
+        config.is_enabled().then_some(ClockState)
     }
+}
 
-    /// Enables the state
-    /// The clock needs no network: it is ready as soon as it is enabled.
-    pub fn enable(&mut self) {
-        self.status = Status::Ready;
-    }
-
-    /// Returns the runtime status of the state
-    pub fn status(&self) -> Status {
-        self.status
+impl State for ClockState {
+    /// The clock needs no network: it always has something to display.
+    fn is_ready(&self) -> bool {
+        true
     }
 
     /// Method for drawing the state to the screen
-    pub fn draw(&self, matrix: &mut Matrix) {
+    fn draw(&self, matrix: &mut Matrix) {
         // The time of day is an input of the frame (like the elapsed time of an
         // animation), not fetched data: reading the system clock is local and cheap.
         let time = Local::now().format("%H:%M:%S").to_string();
