@@ -7,7 +7,10 @@
 //! `drawable.draw(matrix)`, then call `matrix.show()` to display the frame.
 
 use core::convert::Infallible;
-use anyhow::Result;
+use std::ffi::CString;
+use std::os::unix::fs::MetadataExt;
+use anyhow::{Context, Result};
+use tracing::{info, warn};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use super::ffi::Color;
 use super::wrapper::{Canvas, MatrixOptions, RgbLedMatrix, RuntimeOptions};
@@ -38,10 +41,8 @@ impl Matrix {
             ..Default::default()
         };
 
-        // All library defaults: GPIO slowdown 1, run in the foreground, GPIO init,
-        // and drop root privileges to user "daemon" right after init (set
-        // `drop_priv_user` here if the app must keep writing root-owned files).
-        let rt_options = RuntimeOptions::default();
+        // Root is only needed to create the matrix: see `runtime_options`
+        let rt_options = runtime_options()?;
 
         let mut rgb_matrix = RgbLedMatrix::new(options, &rt_options)?;
 
@@ -96,4 +97,44 @@ impl DrawTarget for Matrix {
     fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
         DrawTarget::clear(&mut self.offscreen, color)
     }
+}
+
+/// Runtime options of the matrix: library defaults (GPIO slowdown 1, run in the
+/// foreground, GPIO init), except for the user the app runs as afterwards.
+///
+/// The app is started as root, which the matrix needs to access the GPIO. Right
+/// after creating it, the C library drops root privileges and switches to another
+/// user: by default `daemon`, which can't write the files of the app (next day's
+/// log file, refreshed Google token...). We switch instead to the owner of the
+/// executable, i.e. the user who deployed it, and who also owns those files.
+///
+/// # Errors
+/// If the executable file can't be read.
+fn runtime_options() -> Result<RuntimeOptions> {
+    let exe = std::env::current_exe().context("failed to get the executable path")?;
+    let metadata = std::fs::metadata(&exe)
+        .with_context(|| format!("failed to read the owner of {exe:?}"))?;
+
+    // `MetadataExt` (Unix only) gives the numeric user and group ids of the file
+    let (uid, gid) = (metadata.uid(), metadata.gid());
+
+    // The C library reads "0" as a name, not as root's id: the lookup would fail and
+    // the app would keep running as root anyway, after printing an error. Make it explicit.
+    if uid == 0 || gid == 0 {
+        warn!("The executable belongs to root: privileges are kept, the app runs as root");
+        return Ok(RuntimeOptions {
+            drop_privileges: -1,    // -1: disabled (0 would mean "library default": on)
+            ..Default::default()
+        });
+    }
+
+    info!("Root privileges will be dropped to uid {uid}, gid {gid} (owner of the executable)");
+
+    // The C library accepts a user (group) name or its numeric id. A number never
+    // contains a NUL byte, so `CString::new` can't fail here.
+    Ok(RuntimeOptions {
+        drop_priv_user:  Some(CString::new(uid.to_string())?),
+        drop_priv_group: Some(CString::new(gid.to_string())?),
+        ..Default::default()
+    })
 }
