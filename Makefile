@@ -27,7 +27,9 @@ target:
 # Build and copy the compiled binary to the Raspberry Pi Zero
 deploy: target
 	@echo "==> Deploying binary to $(TARGET_HOST):$(TARGET_DIR)..."
-	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)"
+	# logs/ is created here, by the deploying user: if root created it on the first run,
+	# the app couldn't write new log files once its privileges are dropped
+	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)/logs"
 	scp -r in/ target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
 	@echo "==> Deployment complete!"
 
@@ -57,8 +59,9 @@ stop:
 # Stopping first is required: a running binary can't be overwritten ("Text file busy").
 restart: stop deploy run
 
+# Follow the latest log file on the remote Pi
 logs:
-	@ssh $(TARGET_HOST) "cd $(TARGET_DIR)/log && tail -n 100 -f \`ls -t * | head -n 1\`"
+	@ssh $(TARGET_HOST) "cd $(TARGET_DIR)/logs && tail -n 100 -f \`ls -t * | head -n 1\`"
 
 # Clean both Cargo and the external C library
 clean:
