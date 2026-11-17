@@ -1,6 +1,7 @@
 //! The app itself: builds the states, then runs the frame loop displaying them
 //! one after the other.
 
+use tokio::signal::unix::{signal, SignalKind};
 use tokio::time::{interval, Duration, Instant, MissedTickBehavior};
 use tracing::{info, warn};
 use crate::config::AppConfig;
@@ -23,8 +24,17 @@ const DISPLAY_TIME: Duration = Duration::from_millis(2000);
 //    Frame loop                                                   |
 // =================================================================
 
-/// Runs the app: builds it, then draws frames forever.
+/// Runs the app: builds it, then draws frames until the process is asked to stop.
+///
+/// Stopping means SIGTERM (sent by `systemctl stop` or `kill`) or SIGINT (Ctrl+C).
+/// Without handling them, the process would be killed on the spot, skipping every
+/// `Drop`: the panel would keep showing its last frame (or a single stuck row).
 pub async fn run() {
+    // Listen for the stop signals before anything else: once registered, a signal
+    // no longer kills the process, it is only delivered to these streams.
+    let mut terminate = signal(SignalKind::terminate()).expect("failed to listen for SIGTERM");
+    let mut interrupt = signal(SignalKind::interrupt()).expect("failed to listen for SIGINT");
+
     // States that need the network start their background fetch task while the app is built
     let mut app = App::new().await;
 
@@ -40,8 +50,14 @@ pub async fn run() {
     let mut state_start = Instant::now();
 
     loop {
-        // Wait for the next frame (the very first tick completes immediately)
-        frame_clock.tick().await;
+        // Wait for the next frame (the very first tick completes immediately), unless
+        // a stop signal arrives first. `select!` waits for all three at once, and runs
+        // the branch of the first one that completes.
+        tokio::select! {
+            _ = frame_clock.tick() => {}
+            _ = terminate.recv() => { info!("SIGTERM received"); break }
+            _ = interrupt.recv() => { info!("SIGINT received"); break }
+        }
 
         // Time-based rather than counting frames
         if state_start.elapsed() >= DISPLAY_TIME {
@@ -52,6 +68,11 @@ pub async fn run() {
 
         app.draw();
     }
+
+    info!("Shutting down");
+    // `app` is dropped at the end of this function, and its `Matrix` with it: the C
+    // library then turns the LEDs off. The background tasks are stopped when the
+    // tokio runtime shuts down, once `main` returns.
 }
 
 // =================================================================
