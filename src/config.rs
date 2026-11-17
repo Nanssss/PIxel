@@ -16,8 +16,11 @@ use crate::states::weather::WeatherConfig;
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 /// Struct used to match the TOML file
-// `Default` can be derived because every field type implements `Default`
+// `Default` can be derived because every field type implements `Default`.
+// `#[serde(default)]`: a section missing from the file takes its default config,
+// instead of making the whole file invalid.
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub clock: ClockConfig,
     pub weather: WeatherConfig,

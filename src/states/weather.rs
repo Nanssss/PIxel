@@ -1,21 +1,29 @@
-use serde_json::json;
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use reqwest::Client;
 use tokio::time::Duration;
 use crate::states::{AppContext, State};
 use crate::states::feed::{Feed, Fetcher};
 use crate::matrix::{Color, Matrix};
-use tracing::{trace, info, error};
+use tracing::{trace, info};
 use anyhow::{Result, Context};
 
-const WEATHER_API_BASE_URL: &str = "https://api.open-meteo.com/v1/forecast";
-// Include the file in the final executable
-const WMO_CODES_JSON: &str = include_str!("./res/wmo_codes.json");
+/// Weather API (Open-Meteo: free, no key needed). Doc: https://open-meteo.com/en/docs
+const WEATHER_API_URL: &str = "https://api.open-meteo.com/v1/forecast";
+
+/// Daily values asked to the weather API: must match the fields of `DailyData`
+const DAILY_VARIABLES: &str = "weather_code,apparent_temperature_max,apparent_temperature_min,precipitation_sum";
 
 /// Public struct containing weather config
+// `#[serde(default)]`: a field missing from the config file takes its value from
+// the `Default` implementation below, instead of making the whole file invalid.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct WeatherConfig {
     pub enabled: bool,
+    /// Place the forecast is fetched for, in decimal degrees (north is positive)
+    pub latitude: f64,
+    /// Place the forecast is fetched for, in decimal degrees (east is positive)
+    pub longitude: f64,
 }
 
 /// Default values for config
@@ -23,6 +31,8 @@ impl Default for WeatherConfig {
     fn default() -> Self {
         WeatherConfig{
             enabled: true,
+            latitude: 43.57,
+            longitude: 1.46,
         }
     }
 }
@@ -33,12 +43,50 @@ impl WeatherConfig {
     }
 }
 
-/// Forecast of the day, as received from the weather API
+/// Forecast of the day
+#[derive(Debug)]
 struct Forecast {
-    summary:            String,     // concise weather summary
-    temp_max:           String,     // maximum daily temperature
-    temp_min:           String,     // minimum daily temperature
-    precipitation_sum:  String,     // sum of daily precipitations (including rain, snow, hail)
+    condition:          Condition,  // weather of the day: tells which icon to draw
+    temp_max:           f32,        // maximum daily temperature, in °C
+    temp_min:           f32,        // minimum daily temperature, in °C
+    precipitation_sum:  f32,        // sum of daily precipitations (rain, snow, hail), in mm
+}
+
+/// Weather of the day
+///
+/// The weather API describes it with a *WMO code*, which is far more detailed (light,
+/// moderate or heavy rain, freezing rain, rain showers...): see `Condition::from_wmo`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Condition {
+    Clear,
+    PartlyCloudy,
+    Overcast,
+    Fog,
+    Drizzle,
+    Rain,
+    Snow,
+    Thunderstorm,
+    /// A WMO code that isn't in the table
+    Unknown,
+}
+
+impl Condition {
+    /// Returns the condition matching a WMO weather code.
+    ///
+    /// Codes used by the weather API: https://open-meteo.com/en/docs#weathervariables
+    fn from_wmo(code: u8) -> Self {
+        match code {
+            0 | 1               => Condition::Clear,        // clear, mainly clear
+            2                   => Condition::PartlyCloudy,
+            3                   => Condition::Overcast,
+            45 | 48             => Condition::Fog,          // fog, rime fog
+            51..=57             => Condition::Drizzle,      // light to dense, freezing
+            61..=67 | 80..=82   => Condition::Rain,         // slight to heavy, freezing | showers
+            71..=77 | 85 | 86   => Condition::Snow,         // slight to heavy, grains | showers
+            95..=99             => Condition::Thunderstorm, // with or without hail
+            _                   => Condition::Unknown,
+        }
+    }
 }
 
 
@@ -51,14 +99,14 @@ pub struct WeatherState {
 }
 
 
-// ================================================================= 
+// =================================================================
 //    Methods implementation                                       |
-// ================================================================= 
+// =================================================================
 
-impl WeatherState { 
+impl WeatherState {
     /// WeatherState constructor: starts the background task fetching the forecast.
     ///
-    /// Returns `None` if the state is turned off in the config, or failed to start.
+    /// Returns `None` if the state is turned off in the config.
     /// Nothing is fetched here: the state isn't ready until the first forecast arrives.
     pub fn new(config: WeatherConfig, context: &AppContext) -> Option<Self> {
         /* A state turned off in the config is never built: its task is never started */
@@ -66,18 +114,12 @@ impl WeatherState {
             return None;
         }
 
-        /* If in the future the request needs config, pass it &config */
-        // `inspect_err` logs the error without consuming it, `ok()` turns the `Result`
-        // into an `Option`, and `?` returns `None` right away if there is no value.
-        let url = build_request_url()
-            .inspect_err(|e| error!("Failed to initialize Weather, disabling state: {e:#}"))
-            .ok()?;
-
         // The background task must own everything it uses: cloning the client
         // only copies a handle, the connections stay shared (see `AppContext`).
         let fetcher = ForecastFetcher {
-            client: context.client.clone(),
-            url,
+            client:     context.client.clone(),
+            latitude:   config.latitude,
+            longitude:  config.longitude,
         };
 
         /* Start the background task: returns immediately */
@@ -104,17 +146,18 @@ impl State for WeatherState {
     }
 }
 
-// ================================================================= 
+// =================================================================
 //    Background task                                              |
-// ================================================================= 
+// =================================================================
 
 /// Fetches the forecast for the background task of the state.
 ///
 /// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
 /// lives longer than the function that started it, so it can't borrow anything.
 struct ForecastFetcher {
-    client: Client,         // HTTP client shared with the other states
-    url:    String,         // full request URL, built once at startup
+    client:     Client,     // HTTP client shared with the other states
+    latitude:   f64,        // place the forecast is fetched for (see `WeatherConfig`)
+    longitude:  f64,
 }
 
 impl Fetcher for ForecastFetcher {
@@ -130,173 +173,135 @@ impl Fetcher for ForecastFetcher {
 
     /// Fetches the forecast of the day from the weather API
     async fn fetch(&mut self) -> Result<Forecast> {
-        // `?` returns the error to the caller (the task), which decides what to do with it
-        let data = get_weather(&self.client, &self.url).await?;
+        /* Request parameters */
+        let latitude = self.latitude.to_string();
+        let longitude = self.longitude.to_string();
+        let query_params = &[
+            ("latitude",        latitude.as_str()),
+            ("longitude",       longitude.as_str()),
+            ("daily",           DAILY_VARIABLES),
+            ("timezone",        "auto"),    // the day starts at midnight, local time of the place
+            ("forecast_days",   "1"),       // today only
+        ];
 
-        let summary = code_to_weather(data.weather_code).unwrap_or_else(|e| {
-            error!("Failed to parse weather code: {e:#}");
-            "Unknown".to_string()
-        });
-        let forecast = Forecast {
-            summary,
-            temp_max:           data.apparent_temperature_max.to_string(),
-            temp_min:           data.apparent_temperature_min.to_string(),
-            precipitation_sum:  data.precipitation_sum.to_string(),
-        };
+        /* Send HTTP GET request, and deserialize the JSON of the response */
+        let response: WeatherResponse = self.client
+            .get(WEATHER_API_URL)
+            .header("User-Agent", "reqwest")
+            .query(query_params)
+            .send()
+            .await
+            .context("failed to send weather API request")?
+            // Without this, a "400 Bad Request" would be read as if it was a forecast
+            .error_for_status()
+            .context("weather API returned an error")?
+            .json()
+            .await
+            .context("failed to deserialize weather API response")?;
+        trace!("Weather parsed response: {response:?}");
 
-        info!("[WEATHER] - Summary: {}, Max Temp: {}, Min Temp: {}, Precipitation Sum: {}",
-            forecast.summary, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
+        let forecast = Forecast::from(response.daily);
+
+        info!("[WEATHER] - Condition: {:?}, Max Temp: {}°C, Min Temp: {}°C, Precipitation Sum: {} mm",
+            forecast.condition, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
 
         Ok(forecast)
     }
 }
 
-// ================================================================= 
-//    Static functions                                             |
-// ================================================================= 
-
-/// Builds the full request URL sent to the weather API
-fn build_request_url() -> Result<String> {
-    /* Create a JSON with the request parameters */
-    let params = json!({
-        "latitude": "43.57",
-        "longitude": "1.46",
-        "daily":
-        [
-            "weather_code",
-            "apparent_temperature_max",
-            "apparent_temperature_min",
-            "precipitation_sum"
-        ],
-        "timezone": "Europe/Berlin",
-        "forecast_days": 1,
-    });
-
-    /* Construct query params URL from the json */
-    let params_url = json_to_query_string(&params)
-        .context("failed to build the weather request")?;
-
-    /* Concatenate base URL and query params */
-    Ok(format!("{}?{}", WEATHER_API_BASE_URL, params_url))
-}
-
-
-/// Function to get data from public weather API
-async fn get_weather(client: &Client, url: &str) -> Result<DailyData> {
-    /* Send HTTP GET request */
-    let response = client
-        .get(url)
-        .header("User-Agent", "reqwest")
-        .send()
-        .await
-        .context("failed to send weather API request")?;
-    trace!("Weather response: {response:?}");
-
-    /* Deserialize response JSON */
-    let parsed: WeatherResponse = response
-        .json::<WeatherResponse>()
-        .await
-        .context("failed to deserialize weather API response")?;
-    trace!("Weather parsed response: {parsed:?}");
-
-    Ok(parsed.daily)
-}
-
-
-/// Transforms json to query parameters URL
-fn json_to_query_string(params_json: &serde_json::Value) -> Result<String> {
-    let obj = params_json.as_object()
-        .context("expected a json object for weather parameters")?;
-    
-    let query_string = obj
-        .iter()
-        .map(|(key, value)| {
-            let clean_value = value
-                .to_string()
-                .replace(" ", "")
-                .replace("\"", "")
-                .replace("[", "")
-                .replace("]", "");
-            format!("{}={}", key, clean_value)
-        })
-        .collect::<Vec<String>>()
-        .join("&");
-    
-    Ok(query_string)
-}
-
-
-/// Function to take out first element of `Vec<T>`
-fn first_element_or_default<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-where
-    T: Default + Clone + Deserialize<'de>,
-    D: Deserializer<'de>,
-{
-    let vec: Vec<T> = Vec::deserialize(deserializer)?;  // deserialization as a Vec<T>
-    Ok(vec.into_iter().next().unwrap_or_default())      // take out first element or send back Default
-}
-
-
-/// Function used to translate weather WMO code to weather String using json code file
-fn code_to_weather(code: i32) -> Result<String> {
-    /* Convert String as json Value */
-    let wmo_code_json: serde_json::Value = serde_json::from_str(WMO_CODES_JSON)
-        .context("failed to parse weather code JSON")?;
-
-    /* Get description field ("entry": "day": "description": "xx") */
-    let description = wmo_code_json
-        .get(code.to_string())
-        .and_then(|entry| entry.get("day"))
-        .and_then(|d| d.get("description"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("Unknown")
-        .to_string();
-
-    Ok(description)
-}
-
-
-// ================================================================= 
+// =================================================================
 //    Private types                                                |
-// ================================================================= 
+// =================================================================
 
 /* The following types are used for deserialization */
 
-#[allow(dead_code)] // necessary to avoid warning because fields only used for deserialization
+/// Response of the weather API.
+// Only the fields we use are declared: serde ignores the other ones of the JSON.
 #[derive(Debug, Deserialize)]
 struct WeatherResponse {
-    latitude:               f64,
-    longitude:              f64,
-    generationtime_ms:      f64,
-    utc_offset_seconds:     i32,
-    timezone:               String,
-    timezone_abbreviation:  String,
-    elevation:              f64,
-    daily_units:            DailyUnits,
-    daily:                  DailyData,
+    daily: DailyData,
 }
 
-#[allow(dead_code)] // necessary to avoid warning because fields only used for deserialization
-#[derive(Debug, Deserialize)]
-struct DailyUnits {
-    time:                       String,
-    weather_code:               String,
-    apparent_temperature_max:   String,
-    apparent_temperature_min:   String,
-    precipitation_sum:          String,
-}
-
-#[allow(dead_code)] // necessary to avoid warning because fields only used for deserialization
+/// Daily values of the response. The API returns a list for each of them, with one
+/// element per forecast day: we ask for a single day, so one element.
 #[derive(Debug, Deserialize)]
 struct DailyData {
-    #[serde(deserialize_with = "first_element_or_default")] // function used to deserialize, to take out first element of Vec<.>
-    time:                       String,
-    #[serde(deserialize_with = "first_element_or_default")]
-    weather_code:               i32,                        // weather wmo codes: https://gist.github.com/stellasphere/9490c195ed2b53c707087c8c2db4ec0c
-    #[serde(deserialize_with = "first_element_or_default")]
-    apparent_temperature_max:   f64,
-    #[serde(deserialize_with = "first_element_or_default")]
-    apparent_temperature_min:   f64,
-    #[serde(deserialize_with = "first_element_or_default")]
-    precipitation_sum:          f64,
+    weather_code:               [u8; 1],    // WMO code, see `Condition::from_wmo`
+    apparent_temperature_max:   [f32; 1],   // °C
+    apparent_temperature_min:   [f32; 1],   // °C
+    precipitation_sum:          [f32; 1],   // mm
+}
+
+/// Turns what the API sent into what the state displays.
+///
+/// Implementing `From` gives us `Into` for free.
+impl From<DailyData> for Forecast {
+    fn from(daily: DailyData) -> Self {
+        Forecast {
+            condition:          Condition::from_wmo(daily.weather_code[0]),
+            temp_max:           daily.apparent_temperature_max[0],
+            temp_min:           daily.apparent_temperature_min[0],
+            precipitation_sum:  daily.precipitation_sum[0],
+        }
+    }
+}
+
+// =================================================================
+//    Tests                                                        |
+// =================================================================
+
+// `#[cfg(test)]`: this module is only compiled by `cargo test`, never in the app.
+#[cfg(test)]
+mod tests {
+    // Gives access to everything of the parent module, private items included
+    use super::*;
+
+    /// A real response of the weather API (shortened)
+    const RESPONSE: &str = r#"{
+        "latitude": 52.512604,
+        "timezone": "Europe/Berlin",
+        "daily_units": { "time": "iso8601", "weather_code": "wmo code" },
+        "daily": {
+            "time": ["2026-11-15"],
+            "weather_code": [61],
+            "apparent_temperature_max": [4.5],
+            "apparent_temperature_min": [-3.6],
+            "precipitation_sum": [0.00]
+        }
+    }"#;
+
+    #[test]
+    fn forecast_is_read_from_the_api_response() {
+        let response: WeatherResponse = serde_json::from_str(RESPONSE).unwrap();
+        let forecast = Forecast::from(response.daily);
+
+        assert_eq!(forecast.condition, Condition::Rain);
+        assert_eq!(forecast.temp_max, 4.5);
+        assert_eq!(forecast.temp_min, -3.6);
+        assert_eq!(forecast.precipitation_sum, 0.0);
+    }
+
+    #[test]
+    fn response_without_any_day_is_refused() {
+        let response = r#"{ "daily": {
+            "weather_code": [],
+            "apparent_temperature_max": [],
+            "apparent_temperature_min": [],
+            "precipitation_sum": []
+        } }"#;
+
+        assert!(serde_json::from_str::<WeatherResponse>(response).is_err());
+    }
+
+    #[test]
+    fn wmo_codes_are_grouped_by_condition() {
+        assert_eq!(Condition::from_wmo(0), Condition::Clear);
+        assert_eq!(Condition::from_wmo(48), Condition::Fog);
+        assert_eq!(Condition::from_wmo(57), Condition::Drizzle);
+        assert_eq!(Condition::from_wmo(67), Condition::Rain);
+        assert_eq!(Condition::from_wmo(82), Condition::Rain);     // rain showers
+        assert_eq!(Condition::from_wmo(86), Condition::Snow);     // snow showers
+        assert_eq!(Condition::from_wmo(99), Condition::Thunderstorm);
+        assert_eq!(Condition::from_wmo(42), Condition::Unknown);  // not a code of the API
+    }
 }

@@ -22,7 +22,10 @@ const CENTERED: TextStyle = TextStyleBuilder::new()
     .build();
 
 /// Public struct containing clock config
+// `#[serde(default)]`: a field missing from the config file takes its value from
+// the `Default` implementation below, instead of making the whole file invalid.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
 pub struct ClockConfig {
     enabled: bool,
 }
