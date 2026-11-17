@@ -7,6 +7,7 @@
 //! `drawable.draw(matrix)`, then call `matrix.show()` to display the frame.
 
 use core::convert::Infallible;
+use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use super::ffi::Color;
 use super::wrapper::{Canvas, MatrixOptions, RgbLedMatrix, RuntimeOptions};
@@ -23,9 +24,9 @@ impl Matrix {
     /// Creates the matrix for this project's panel (32x64, Adafruit HAT).
     /// Requires root privileges on the Pi.
     ///
-    /// # Panics
+    /// # Errors
     /// If the C library fails to create the matrix (usually: not run as root).
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self> {
         // This project's panel. Fields not listed keep the library defaults
         // (`..Default::default()` fills the rest with zeros = library defaults).
         let options = MatrixOptions {
@@ -42,15 +43,13 @@ impl Matrix {
         // `drop_priv_user` here if the app must keep writing root-owned files).
         let rt_options = RuntimeOptions::default();
 
-        // `expect` instead of `unwrap`: same panic, but with a helpful message.
-        let mut rgb_matrix = RgbLedMatrix::new(options, &rt_options)
-            .expect("failed to init the LED matrix");
+        let mut rgb_matrix = RgbLedMatrix::new(options, &rt_options)?;
 
         // Safety: the canvas is stored next to `rgb_matrix` and never leaves
         // `Matrix`, so it can't be used after the matrix is dropped.
         let offscreen = unsafe { rgb_matrix.create_offscreen_canvas() };
 
-        Self { offscreen, rgb_matrix }
+        Ok(Self { offscreen, rgb_matrix })
     }
 
     /// Displays everything drawn on the matrix since the last call, on the next vertical sync.

@@ -7,6 +7,7 @@
 //! Usage: `cargo run --features simulator` (needs SDL2: `sudo apt install libsdl2-dev`).
 
 use core::convert::Infallible;
+use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
 use super::ffi::Color;
@@ -24,16 +25,19 @@ pub struct Matrix {
 
 impl Matrix {
     /// Creates the simulated panel.
-    pub fn new() -> Self {
+    ///
+    /// Never fails: it returns a `Result` only to have the same signature as the real
+    /// `Matrix::new`, so that the app builds with either.
+    pub fn new() -> Result<Self> {
         let settings = OutputSettingsBuilder::new()
             .scale(12)          // each LED is a 12x12 square on the PC screen...
             .pixel_spacing(3)   // ...with a dark gap between LEDs, like on the real panel
             .build();
 
-        Self {
+        Ok(Self {
             display: SimulatorDisplay::new(PANEL_SIZE),
             window: Window::new("PIxel simulator", &settings),
-        }
+        })
     }
 
     /// Displays everything drawn on the matrix since the last call.

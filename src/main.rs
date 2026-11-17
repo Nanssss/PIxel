@@ -8,12 +8,18 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, fil
 use tracing_appender::{rolling, non_blocking::WorkerGuard};
 use std::sync::{OnceLock, LazyLock};
 use std::path::PathBuf;
-use tracing::info;
+use anyhow::{Context, Result};
+use tracing::{error, info};
 
 /* Constants */
 const APP_NAME:&str = "PIxel";
 const LOG_DIR:&str = "./logs";
 static FILE_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
+/// Directory of the executable: the files of the app (`in/`...) are found from there,
+/// whatever the current directory is when it is started.
+///
+/// Computed on first use. The `expect`s can't fail on Linux: the path of a running
+/// executable is always known, and a file always has a parent directory.
 pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     std::env::current_exe()
         .expect("Failed to get current executable path")
@@ -26,13 +32,19 @@ pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 //    main function                                                |
 // ================================================================= 
 
+/// Returning a `Result` from `main`: on `Err`, Rust prints the error and the process
+/// exits with code 1 (so a service manager knows it failed), instead of a panic.
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     /* Create tracing subscriber */
-    init_logging();
+    // If this fails, nothing can be logged: the error is only printed by Rust.
+    init_logging()?;
 
     info!("Starting PIxel...");
-    app::run().await;
+    // The error is also logged, so that it ends up in the log file
+    app::run()
+        .await
+        .inspect_err(|e| error!("Fatal error: {e:#}"))
 }
 
 // ================================================================= 
@@ -40,14 +52,17 @@ async fn main() {
 // ================================================================= 
 
 /// Function that initializes tracing subscriber for logging
-fn init_logging() {
+///
+/// # Errors
+/// If the log file can't be created, or a subscriber was already set.
+fn init_logging() -> Result<()> {
     /* 1. Create a rotating file appender (daily or hourly) */
     let file_appender = rolling::RollingFileAppender::builder()
         .rotation(rolling::Rotation::DAILY)
         .filename_prefix(APP_NAME)
         .filename_suffix("log")
         .build(LOG_DIR)
-        .expect("Failed to initialize rolling file appender");
+        .context("failed to create the log file")?;
 
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     // NOTE: keep `guard` in a global/static to ensure logs flush on exit
@@ -84,5 +99,7 @@ fn init_logging() {
         .with(filter)
         .with(console_layer)
         .with(file_layer)
-        .init();
+        // `try_init` returns an error where `init` would panic
+        .try_init()
+        .context("failed to set the logging subscriber")
 }

@@ -1,6 +1,7 @@
 //! The app itself: builds the states, then runs the frame loop displaying them
 //! one after the other.
 
+use anyhow::{Context, Result};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::time::{interval, Duration, Instant, MissedTickBehavior};
 use tracing::{info, warn};
@@ -29,14 +30,18 @@ const DISPLAY_TIME: Duration = Duration::from_millis(2000);
 /// Stopping means SIGTERM (sent by `systemctl stop` or `kill`) or SIGINT (Ctrl+C).
 /// Without handling them, the process would be killed on the spot, skipping every
 /// `Drop`: the panel would keep showing its last frame (or a single stuck row).
-pub async fn run() {
+///
+/// # Errors
+/// If the app can't start (e.g. the matrix can't be created). Once started, it only
+/// returns `Ok`: runtime problems (network...) are handled by each state.
+pub async fn run() -> Result<()> {
     // Listen for the stop signals before anything else: once registered, a signal
     // no longer kills the process, it is only delivered to these streams.
-    let mut terminate = signal(SignalKind::terminate()).expect("failed to listen for SIGTERM");
-    let mut interrupt = signal(SignalKind::interrupt()).expect("failed to listen for SIGINT");
+    let mut terminate = signal(SignalKind::terminate()).context("failed to listen for SIGTERM")?;
+    let mut interrupt = signal(SignalKind::interrupt()).context("failed to listen for SIGINT")?;
 
     // States that need the network start their background fetch task while the app is built
-    let mut app = App::new().await;
+    let mut app = App::new().await?;
 
     // Frame clock. Unlike `sleep(FRAME_PERIOD)`, an interval schedules its ticks on
     // a fixed time grid (start + n * period): the time spent drawing a frame is not
@@ -73,6 +78,7 @@ pub async fn run() {
     // `app` is dropped at the end of this function, and its `Matrix` with it: the C
     // library then turns the LEDs off. The background tasks are stopped when the
     // tokio runtime shuts down, once `main` returns.
+    Ok(())
 }
 
 // =================================================================
@@ -93,7 +99,10 @@ struct App {
 /// App methods implementation
 impl App {
     /// App constructor
-    async fn new() -> Self {
+    ///
+    /// # Errors
+    /// If the matrix can't be created.
+    async fn new() -> Result<Self> {
         /* Build config */
         let config = AppConfig::load_or_default();
         info!("config:\n{config:?}");
@@ -107,14 +116,14 @@ impl App {
         let states = build_states(config, &context).await;
 
         /* Build matrix */
-        let matrix = Matrix::new();
+        let matrix = Matrix::new().context("failed to init the LED matrix")?;
 
         /* Return constructed App, starting on the first state of the rotation */
-        App {
+        Ok(App {
             states,
             current: 0,
             matrix,
-        }
+        })
     }
 
     /// Call draw() method of the current state, or blank the screen if that
