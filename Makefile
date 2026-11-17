@@ -3,8 +3,10 @@
 export
 
 BINARY_NAME = PIxel
+# Name of the systemd service on the Pi (see deploy/pixel.service)
+SERVICE = pixel
 
-.PHONY: all host sim target clean
+.PHONY: all host sim target deploy install run stop restart logs clean
 
 # Default action builds for the cross-target (ARMv6)
 all: target
@@ -29,18 +31,30 @@ deploy: target
 	scp -r in/ target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
 	@echo "==> Deployment complete!"
 
-# Run the binary on the remote Pi (runs in the background using nohup)
+# Install the systemd service on the Pi (once): PIxel then starts at boot, and restarts after a crash.
+# The absolute deploy directory is asked to the Pi (TARGET_DIR may be relative to the home directory),
+# then filled into the unit file, which is written to /etc/systemd/system.
+install:
+	@echo "==> Installing the $(SERVICE) service on $(TARGET_HOST)..."
+	@dir=$$(ssh $(TARGET_HOST) "cd $(TARGET_DIR) && pwd") && \
+	sed -e "s|@TARGET_DIR@|$$dir|g" -e "s|@BINARY_NAME@|$(BINARY_NAME)|g" deploy/$(SERVICE).service | \
+	ssh $(TARGET_HOST) "sudo tee /etc/systemd/system/$(SERVICE).service > /dev/null && \
+		sudo systemctl daemon-reload && sudo systemctl enable $(SERVICE)"
+	@echo "==> Service installed and enabled at boot."
+
+# Start the service on the remote Pi
 run:
 	@echo "==> Starting $(BINARY_NAME) on $(TARGET_HOST)..."
-	@ssh $(TARGET_HOST) "cd $(TARGET_DIR) && sudo sh -c 'setsid nohup ./$(BINARY_NAME) &'"
+	@ssh $(TARGET_HOST) "sudo systemctl start $(SERVICE)"
 
-# Stop any running instance of the binary on the remote Pi
+# Stop the service on the remote Pi (SIGTERM: the app turns the panel off before exiting)
 stop:
 	@echo "==> Stopping $(BINARY_NAME) on $(TARGET_HOST)..."
-	@ssh $(TARGET_HOST) "sudo pkill -x $(BINARY_NAME) || true"
+	@ssh $(TARGET_HOST) "sudo systemctl stop $(SERVICE)"
 	@echo "==> Application stopped."
 
-# Convenient shortcut to restart (stop -> deploy -> run)
+# Convenient shortcut to restart (stop -> deploy -> run).
+# Stopping first is required: a running binary can't be overwritten ("Text file busy").
 restart: stop deploy run
 
 logs:

@@ -1,0 +1,27 @@
+# systemd service running PIxel on the Raspberry Pi: starts it at boot, and
+# restarts it after a crash.
+#
+# Installed once with `make install`, which replaces @TARGET_DIR@ and @BINARY_NAME@.
+# Then: `make run` / `make stop`, or `sudo systemctl start|stop|status pixel` on the Pi.
+# Console output (e.g. the first Google authorization URL): `journalctl -u pixel`.
+
+[Unit]
+Description=PIxel LED matrix display
+After=network.target
+
+[Service]
+# No `User=`: the app starts as root (needed for the GPIO), then drops its
+# privileges itself, to the owner of the executable.
+WorkingDirectory=@TARGET_DIR@
+ExecStart=@TARGET_DIR@/@BINARY_NAME@
+
+# Restart after a crash or a failed start (never after `systemctl stop`)
+Restart=on-failure
+RestartSec=5
+
+# `systemctl stop` sends SIGTERM: the app turns the panel off and exits.
+# If it hangs, it is killed after this delay.
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target
