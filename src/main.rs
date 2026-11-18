@@ -97,7 +97,7 @@ fn init_logging() -> Result<WorkerGuard> {
 
     /* 4. Filtering */
     // default: info ; overridable by RUST_LOG=debug ./app
-    // to filter PIxel only: RUST_LOG=PIxel=debug ./app (the target is the crate name)
+    // to filter PIxel only: RUST_LOG=pixel=debug ./app (the target is the crate name)
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy();

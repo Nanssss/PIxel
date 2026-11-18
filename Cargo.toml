@@ -1,9 +1,14 @@
 [package]
-name = "PIxel"
+name = "pixel"
 version = "0.1.0"
 edition = "2024"
 authors = ["Nans Rey <nans2502@gmail.com>"]
 license = "GPL-2.0-only"
+
+# The binary keeps the project's name (Makefile, systemd service)
+[[bin]]
+name = "PIxel"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.100"
