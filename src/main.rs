@@ -14,15 +14,11 @@ use tracing::{error, info};
 
 /* Constants */
 const APP_NAME:&str = "PIxel";
-/// Log directory, relative to the executable directory (like the other files of the app)
+/// Log directory, relative to the executable directory
 const LOG_DIR: &str = "logs";
 /// Number of daily log files kept: older ones are deleted, so the SD card never fills up
 const LOG_FILES_KEPT: usize = 7;
-/// Directory of the executable: the files of the app (`in/`...) are found from there,
-/// whatever the current directory is when it is started.
-///
-/// Computed on first use. The `expect`s can't fail on Linux: the path of a running
-/// executable is always known, and a file always has a parent directory.
+/// Directory of the executable, whatever the current directory is when it is started.
 pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     std::env::current_exe()
         .expect("Failed to get current executable path")
@@ -40,7 +36,6 @@ pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 #[tokio::main]
 async fn main() -> Result<()> {
     /* Create tracing subscriber */
-    // If this fails, nothing can be logged: the error is only printed by Rust.
     // The guard must live until the end of `main`: dropping it writes the last
     // buffered lines to the file. `let _log_guard` keeps it alive until then, while
     // `let _ = ...` would drop it right away.

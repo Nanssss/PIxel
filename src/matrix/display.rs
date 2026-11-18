@@ -99,14 +99,13 @@ impl DrawTarget for Matrix {
     }
 }
 
-/// Runtime options of the matrix: library defaults (GPIO slowdown 1, run in the
-/// foreground, GPIO init), except for the user the app runs as afterwards.
+/// Runtime options of the matrix
 ///
 /// The app is started as root, which the matrix needs to access the GPIO. Right
 /// after creating it, the C library drops root privileges and switches to another
-/// user: by default `daemon`, which can't write the files of the app (next day's
-/// log file, refreshed Google token...). We switch instead to the owner of the
-/// executable, i.e. the user who deployed it, and who also owns those files.
+/// user: by default `daemon`, which can't write the files of the app.
+/// We switch instead to the owner of the executable, i.e. the user who deployed it,
+/// and who also owns those files.
 ///
 /// # Errors
 /// If the executable file can't be read.

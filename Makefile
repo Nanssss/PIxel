@@ -33,7 +33,7 @@ deploy: target
 	scp -r in/ target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
 	@echo "==> Deployment complete!"
 
-# Install the systemd service on the Pi (once): PIxel then starts at boot, and restarts after a crash.
+# Install the systemd service on the Pi
 # The absolute deploy directory is asked to the Pi (TARGET_DIR may be relative to the home directory),
 # then filled into the unit file, which is written to /etc/systemd/system.
 install:
@@ -56,7 +56,6 @@ stop:
 	@echo "==> Application stopped."
 
 # Convenient shortcut to restart (stop -> deploy -> run).
-# Stopping first is required: a running binary can't be overwritten ("Text file busy").
 restart: stop deploy run
 
 # Follow the latest log file on the remote Pi

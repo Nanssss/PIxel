@@ -27,10 +27,6 @@ const DISPLAY_TIME: Duration = Duration::from_millis(2000);
 
 /// Runs the app: builds it, then draws frames until the process is asked to stop.
 ///
-/// Stopping means SIGTERM (sent by `systemctl stop` or `kill`) or SIGINT (Ctrl+C).
-/// Without handling them, the process would be killed on the spot, skipping every
-/// `Drop`: the panel would keep showing its last frame (or a single stuck row).
-///
 /// # Errors
 /// If the app can't start (e.g. the matrix can't be created). Once started, it only
 /// returns `Ok`: runtime problems (network...) are handled by each state.
@@ -55,9 +51,7 @@ pub async fn run() -> Result<()> {
     let mut state_start = Instant::now();
 
     loop {
-        // Wait for the next frame (the very first tick completes immediately), unless
-        // a stop signal arrives first. `select!` waits for all three at once, and runs
-        // the branch of the first one that completes.
+        // Wait for the next frame unless a stop signal arrives first.
         tokio::select! {
             _ = frame_clock.tick() => {}
             _ = terminate.recv() => { info!("SIGTERM received"); break }
@@ -75,9 +69,6 @@ pub async fn run() -> Result<()> {
     }
 
     info!("Shutting down");
-    // `app` is dropped at the end of this function, and its `Matrix` with it: the C
-    // library then turns the LEDs off. The background tasks are stopped when the
-    // tokio runtime shuts down, once `main` returns.
     Ok(())
 }
 
