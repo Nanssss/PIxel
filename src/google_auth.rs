@@ -24,7 +24,6 @@ pub struct GoogleAuth {
 }
 
 /// Connector of the HTTP client yup-oauth2 builds by default (HTTPS with rustls).
-// Named through yup-oauth2 itself: it always matches the version in use.
 type Connector = <DefaultHyperClientBuilder as HyperClientBuilder>::Connector;
 
 impl GoogleAuth {

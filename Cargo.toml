@@ -26,7 +26,7 @@ tokio = { version = "1.44.1", features = ["full"] }
 toml = "1.1.4"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
-tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json", "registry"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "registry"] }
 yup-oauth2 = "12.1.0"
 
 [features]
