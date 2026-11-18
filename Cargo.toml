@@ -19,8 +19,8 @@ embedded-graphics = "0.8.1"
 embedded-graphics-simulator = { version = "0.8.0", optional = true }
 # Simulator only: closing its window sends SIGINT (already compiled for tokio)
 libc = { version = "0.2", optional = true }
-openssl = { version = "0.10.82", features = ["vendored"] }
-reqwest = { version = "0.12.14", features = ["blocking", "json"] }
+# HTTPS with rustls, like yup-oauth2: a single TLS stack, no OpenSSL to cross-compile
+reqwest = { version = "0.12.14", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.44.1", features = ["full"] }
 toml = "1.1.4"
