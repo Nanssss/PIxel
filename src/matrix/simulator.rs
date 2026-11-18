@@ -10,6 +10,7 @@ use core::convert::Infallible;
 use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
+use tracing::info;
 use super::ffi::Color;
 
 /// Same size as the real panel (64 columns, 32 rows).
@@ -46,9 +47,12 @@ impl Matrix {
     pub fn show(&mut self) {
         self.window.update(&self.display);
 
-        // Window events are only read here: closing the window quits the app on the next `show`.
+        // Closing the window acts like a Ctrl+C: the frame loop (`app::run`) receives
+        // the signal and stops the app cleanly, as on the Pi.
         if self.window.events().any(|event| event == SimulatorEvent::Quit) {
-            std::process::exit(0);
+            info!("Simulator window closed");
+            // Safety: `raise` has no precondition, it only sends a signal to this thread.
+            unsafe { libc::raise(libc::SIGINT) };
         }
 
         self.fill(Color { r: 0, g: 0, b: 0 });
