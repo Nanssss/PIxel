@@ -1,7 +1,8 @@
 use crate::states::{AppContext, State};
 use crate::states::feed::{Feed, Fetcher};
 use crate::google_auth::GoogleAuth;
-use crate::matrix::{Color, Matrix};
+use crate::matrix::Matrix;
+use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
 use tokio::time::Duration;
 use serde::Deserialize;
@@ -132,8 +133,7 @@ impl State for GTasksState {
         // (the tasks may expire right between the two calls)
         let Some(_tasks) = self.tasks.latest() else { return };
 
-        let color = Color { r: 0, g: 0, b: 255 };
-        matrix.fill(color);
+        let Ok(()) = matrix.clear(Rgb888::BLUE);
     }
 }
 

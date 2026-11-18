@@ -30,8 +30,12 @@ pub trait State {
 
     /// Draws one frame of the state on the matrix.
     ///
-    /// Only called when the state is ready, and must never wait (no network, no
-    /// file): it runs in the frame loop.
+    /// Only called when the state is ready. Runs in the frame loop, 30 times per
+    /// second: no waiting, no I/O, no decoding. Prepare data in the constructor or
+    /// in the background `fetch` instead.
+    ///
+    /// A color, font or style used by several states belongs in a shared module
+    /// (e.g. `src/ui.rs`, to create with the first one), not copied in each state.
     fn draw(&self, matrix: &mut Matrix);
 }
 

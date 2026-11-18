@@ -6,8 +6,8 @@
 //! - `simulator`: the same `Matrix` shown in a window on the PC, replaces `display`
 //!   when built with `--features simulator`.
 //!
-//! The public API is re-exported below, so the app only needs
-//! `use crate::matrix::{Matrix, Color};`.
+//! The app only needs `use crate::matrix::Matrix;`, and draws on it with
+//! `embedded-graphics` (colors are `Rgb888`). The C library's types never leave this module.
 
 mod ffi;
 mod graphics;
@@ -24,7 +24,3 @@ pub use display::Matrix;
 mod simulator;
 #[cfg(feature = "simulator")]
 pub use simulator::Matrix;
-
-// Only re-export what the app uses: in a binary crate, an unused `pub use`
-// triggers a warning. Add `Canvas`, `Font`, `MatrixOptions`... here when needed.
-pub use ffi::Color;

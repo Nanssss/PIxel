@@ -12,7 +12,6 @@ use std::os::unix::fs::MetadataExt;
 use anyhow::{Context, Result};
 use tracing::{info, warn};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
-use super::ffi::Color;
 use super::wrapper::{Canvas, MatrixOptions, RgbLedMatrix, RuntimeOptions};
 
 /// The LED matrix as the app sees it: draw on it, then [`Matrix::show`] the frame.
@@ -68,11 +67,6 @@ impl Matrix {
         self.rgb_matrix.swap_on_vsync(&mut self.offscreen);
         self.offscreen.clear();
     }
-
-    /// Fills the whole panel with a single solid color (visible after `show`).
-    pub fn fill(&mut self, color: Color) {
-        self.offscreen.fill(color);
-    }
 }
 
 /// The matrix is drawn on like a canvas: everything goes to its hidden buffer,
@@ -94,7 +88,10 @@ impl DrawTarget for Matrix {
         self.offscreen.draw_iter(pixels)
     }
 
+    /// Fills the whole panel with one color, using the fast C library call.
     fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
+        // Can't directly use .clear() because it's already a canvas function
+        // In this case we want to map it to led_canvas_fill
         DrawTarget::clear(&mut self.offscreen, color)
     }
 }

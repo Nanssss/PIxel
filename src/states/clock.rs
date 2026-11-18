@@ -79,11 +79,10 @@ impl State for ClockState {
 
         let screen = matrix.bounding_box();
 
-        // Drawing on the matrix can't fail (Error = Infallible), so `unwrap()` never panics
         /* 1px red border around the whole panel */
-        screen.into_styled(BORDER_STYLE).draw(matrix).unwrap();
+        let Ok(()) = screen.into_styled(BORDER_STYLE).draw(matrix);
 
         /* Time centered on the panel */
-        Text::with_text_style(&time, screen.center(), TIME_FONT, CENTERED).draw(matrix).unwrap();
+        let Ok(_) = Text::with_text_style(&time, screen.center(), TIME_FONT, CENTERED).draw(matrix);
     }
 }

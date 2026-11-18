@@ -3,7 +3,8 @@ use reqwest::Client;
 use tokio::time::Duration;
 use crate::states::{AppContext, State};
 use crate::states::feed::{Feed, Fetcher};
-use crate::matrix::{Color, Matrix};
+use crate::matrix::Matrix;
+use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use tracing::{trace, info};
 use anyhow::{Result, Context};
 
@@ -141,8 +142,7 @@ impl State for WeatherState {
         // (the forecast may expire right between the two calls)
         let Some(_forecast) = self.forecast.latest() else { return };
 
-        let color = Color { r: 0, g: 255, b: 0 };
-        matrix.fill(color);
+        let Ok(()) = matrix.clear(Rgb888::GREEN);
     }
 }
 

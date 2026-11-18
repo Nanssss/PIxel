@@ -11,7 +11,6 @@ use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
 use tracing::info;
-use super::ffi::Color;
 
 /// Same size as the real panel (64 columns, 32 rows).
 const PANEL_SIZE: Size = Size::new(64, 32);
@@ -55,14 +54,8 @@ impl Matrix {
             unsafe { libc::raise(libc::SIGINT) };
         }
 
-        self.fill(Color { r: 0, g: 0, b: 0 });
-    }
-
-    /// Fills the whole panel with a single solid color (visible after `show`).
-    pub fn fill(&mut self, color: Color) {
-        // `From<Rgb888> for Color` exists (graphics.rs) but not the other way around.
-        // Drawing on the simulator can't fail (`Error = Infallible`): `unwrap()` never panics.
-        self.display.clear(Rgb888::new(color.r, color.g, color.b)).unwrap();
+        // Can't fail (`Error = Infallible`): the pattern needs no `else` (see `State::draw`)
+        let Ok(()) = self.display.clear(Rgb888::BLACK);
     }
 }
 
@@ -83,5 +76,10 @@ impl DrawTarget for Matrix {
     {
         // Pixels outside of the panel are ignored by `SimulatorDisplay`
         self.display.draw_iter(pixels)
+    }
+
+    /// Fills the whole panel with one color, like the real `Matrix`.
+    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
+        self.display.clear(color)
     }
 }
