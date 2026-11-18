@@ -4,9 +4,6 @@
 # Ignore compiled binary files
 target/
 
-# Ignore the lock file
-Cargo.lock
-
 # Ignore local environment configuration files
 .cargo/config
 
@@ -21,11 +18,9 @@ Cargo.lock
 # Ignore generated documentation files
 docs/
 
-# Ignore test files
-tests/
-
 # Ignore log files
 *.log
+logs/
 log/
 
 # Ignore IDE settings
