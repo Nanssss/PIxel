@@ -79,6 +79,8 @@ fn main() {
     // via CargoCallbacks, so no manual cross-compilation configuration needed.
     let bindings = bindgen::Builder::default()
         .header(wrapper_path.to_str().unwrap())
+        // Only the matrix C API (and the types it uses), not everything its headers include
+        .allowlist_file(".*led-matrix-c\\.h")
         .clang_arg(format!("-I{}", include_dir.display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
