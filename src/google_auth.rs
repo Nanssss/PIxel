@@ -5,10 +5,8 @@
 //! them once they have expired.
 
 use anyhow::{Context, Result};
-use hyper_util::client::legacy::connect::HttpConnector;
-use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
+use yup_oauth2::{DefaultHyperClientBuilder, HyperClientBuilder, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 use yup_oauth2::authenticator::Authenticator;
-use yup_oauth2::hyper_rustls::HttpsConnector;
 use crate::EXECUTABLE_DIR;
 
 /// Application secret, relative to the executable directory. Generate this file
@@ -22,8 +20,12 @@ const TOKEN_FILE: &str = "in/tokencache.json";
 // The field is private: the rest of the app doesn't depend on `yup-oauth2`, and
 // only sees `new` and `token`.
 pub struct GoogleAuth {
-    authenticator: Authenticator<HttpsConnector<HttpConnector>>,
+    authenticator: Authenticator<Connector>,
 }
+
+/// Connector of the HTTP client yup-oauth2 builds by default (HTTPS with rustls).
+// Named through yup-oauth2 itself: it always matches the version in use.
+type Connector = <DefaultHyperClientBuilder as HyperClientBuilder>::Connector;
 
 impl GoogleAuth {
     /// Prepares the authentication. Only local files are read here: nothing is
