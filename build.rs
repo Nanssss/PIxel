@@ -33,6 +33,8 @@ fn main() {
     // Compile the C++ library. LTO is disabled so the static lib contains native
     // machine code rather than GCC LTO bytecode (which rust-lld cannot read).
     let status = Command::new("make")
+        // Share Cargo's job slots with make: the C++ files compile in parallel
+        .env("MAKEFLAGS", env::var("CARGO_MAKEFLAGS").unwrap_or_default())
         .arg("-C") // run in the build dir: objects and librgbmatrix.a are written there
         .arg(&build_dir)
         .arg("-f") // ...but use the library's own Makefile
@@ -70,8 +72,8 @@ fn main() {
 
     // Set up rerun triggers so Cargo recompiles if source files or headers change
     println!("cargo:rerun-if-changed={}", wrapper_path.display());
-    println!("cargo:rerun-if-changed={}", include_dir.join("led-matrix-c.h").display());
-    println!("cargo:rerun-if-changed={}", lib_dir.join("Makefile").display());
+    println!("cargo:rerun-if-changed={}", include_dir.display());
+    println!("cargo:rerun-if-changed={}", lib_dir.display());
     println!("cargo:rerun-if-changed={}", matrix_dir.join("config.mk").display());
 
     // Generate bindings using bindgen

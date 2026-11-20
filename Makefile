@@ -6,6 +6,10 @@ BINARY_NAME = PIxel
 # Name of the systemd service on the Pi (see deploy/pixel.service)
 SERVICE = pixel
 
+# Files of in/ sent to the Pi. Never the token cache: each machine keeps its own.
+# `wildcard` drops credentials.json from the list if it doesn't exist locally.
+IN_FILES = in/config.toml $(wildcard in/credentials.json)
+
 .PHONY: all host sim target deploy install run stop restart logs clean
 
 # Default action builds for the cross-target (ARMv6)
@@ -29,8 +33,9 @@ deploy: target
 	@echo "==> Deploying binary to $(TARGET_HOST):$(TARGET_DIR)..."
 	# logs/ is created here, by the deploying user: if root created it on the first run,
 	# the app couldn't write new log files once its privileges are dropped
-	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)/logs"
-	scp -r in/ target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
+	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)/logs $(TARGET_DIR)/in"
+	scp $(IN_FILES) $(TARGET_HOST):$(TARGET_DIR)/in/
+	scp -r target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
 	@echo "==> Deployment complete!"
 
 # Install the systemd service on the Pi

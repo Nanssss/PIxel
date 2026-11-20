@@ -39,12 +39,6 @@ impl Default for ClockConfig {
     }
 }
 
-impl ClockConfig {
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-}
-
 /// Public struct containing global clock state
 ///
 /// Unlike the other states, the clock stores no data: the time is not fetched
@@ -61,7 +55,7 @@ impl ClockState {
     /// ClockState constructor: returns `None` if the clock is turned off in the config.
     pub fn new(config: ClockConfig) -> Option<Self> {
         // `then_some(value)` turns a `bool` into an `Option`: `Some(value)` if true, else `None`
-        config.is_enabled().then_some(ClockState)
+        config.enabled.then_some(ClockState)
     }
 }
 

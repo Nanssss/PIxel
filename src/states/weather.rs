@@ -20,7 +20,7 @@ const DAILY_VARIABLES: &str = "weather_code,apparent_temperature_max,apparent_te
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct WeatherConfig {
-    pub enabled: bool,
+    enabled: bool,
     /// Place the forecast is fetched for, in decimal degrees (north is positive)
     pub latitude: f64,
     /// Place the forecast is fetched for, in decimal degrees (east is positive)
@@ -35,12 +35,6 @@ impl Default for WeatherConfig {
             latitude: 43.57,
             longitude: 1.46,
         }
-    }
-}
-
-impl WeatherConfig {
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
     }
 }
 
@@ -111,7 +105,7 @@ impl WeatherState {
     /// Nothing is fetched here: the state isn't ready until the first forecast arrives.
     pub fn new(config: WeatherConfig, context: &AppContext) -> Option<Self> {
         /* A state turned off in the config is never built: its task is never started */
-        if !config.is_enabled() {
+        if !config.enabled {
             return None;
         }
 
@@ -187,7 +181,6 @@ impl Fetcher for ForecastFetcher {
         /* Send HTTP GET request, and deserialize the JSON of the response */
         let response: WeatherResponse = self.client
             .get(WEATHER_API_URL)
-            .header("User-Agent", "reqwest")
             .query(query_params)
             .send()
             .await

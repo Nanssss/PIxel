@@ -12,6 +12,7 @@ pub mod gtasks;
 pub mod weather;
 
 use reqwest::Client;
+use anyhow::{Context, Result};
 use crate::matrix::Matrix;
 
 /// Something the app can show on the matrix (the clock, the weather...).
@@ -51,9 +52,19 @@ pub struct AppContext {
 /// Method implementations for AppContext
 impl AppContext {
     /// AppContext constructor
-    pub fn new() -> Self {
-        AppContext {
-            client: Client::new(),
-        }
+    ///
+    /// # Errors
+    /// If the HTTP client can't be built (e.g. the TLS backend fails to start).
+    // `Client::new()` would panic in that case: the builder returns an error instead.
+    pub fn new() -> Result<Self> {
+        let client = Client::builder()
+            // Sent with every request, to tell the APIs who is calling (e.g. "pixel/0.1.0").
+            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .context("failed to build the HTTP client")?;
+
+        Ok(AppContext {
+            client,
+        })
     }
 }

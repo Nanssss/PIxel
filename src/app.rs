@@ -92,22 +92,22 @@ impl App {
     /// App constructor
     ///
     /// # Errors
-    /// If the matrix can't be created.
+    /// If the HTTP client or the matrix can't be created.
     async fn new() -> Result<Self> {
+        /* Build matrix */
+        let matrix = Matrix::new().context("failed to init the LED matrix")?;
+
         /* Build config */
         let config = AppConfig::load_or_default();
         info!("config:\n{config:?}");
 
         /* Build context */
         // Only needed while the states are built: each background task keeps its own handle on it
-        let context = AppContext::new();
+        let context = AppContext::new()?;
 
         /* Build states */
         // States that need the network start their background fetch task here.
         let states = build_states(config, &context).await;
-
-        /* Build matrix */
-        let matrix = Matrix::new().context("failed to init the LED matrix")?;
 
         /* Return constructed App, starting on the first state of the rotation */
         Ok(App {

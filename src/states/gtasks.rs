@@ -6,7 +6,7 @@ use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
 use tokio::time::Duration;
 use serde::Deserialize;
-use tracing::{trace, info, error};
+use tracing::{trace, info, debug, error};
 use anyhow::{Result, Context};
 use chrono::{DateTime, Local, NaiveDate, Utc};
 
@@ -34,12 +34,6 @@ impl Default for GTasksConfig {
         GTasksConfig {
             enabled: true,
         }
-    }
-}
-
-impl GTasksConfig {
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
     }
 }
 
@@ -96,7 +90,7 @@ impl GTasksState {
     /// is fetched: the state isn't ready until the first tasks arrive.
     pub async fn new(config: GTasksConfig, context: &AppContext) -> Option<Self> {
         /* A state turned off in the config is never built: its task is never started */
-        if !config.is_enabled() {
+        if !config.enabled {
             return None;
         }
 
@@ -214,10 +208,10 @@ fn log_tasks(tasks: &[GTask]) {
 
     /* Print each task */
     for task in tasks {
-        info!("[GOOGLE TASKS] - Task: {} ({:?})", task.title, task.start);
+        debug!("[GOOGLE TASKS] - Task: {} ({:?})", task.title, task.start);
 
         if let Some(description) = &task.description {
-            info!("[GOOGLE TASKS] - Task description: {}", description);
+            debug!("[GOOGLE TASKS] - Task description: {}", description);
         }
     }
 }
