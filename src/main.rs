@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod feed;
 mod google_auth;
 mod matrix;
 mod states;

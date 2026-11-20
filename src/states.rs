@@ -2,12 +2,8 @@
 //!
 //! Each state lives in its own module and implements the [`State`] trait below,
 //! which is all the app (see `app.rs`) knows about it.
-//!
-//! `feed` is not a state: it is the background fetching shared by the states that
-//! get their data from the network.
 
 pub mod clock;
-pub mod feed;
 pub mod gtasks;
 pub mod weather;
 

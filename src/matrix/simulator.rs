@@ -11,9 +11,10 @@ use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
 use tracing::info;
+use super::{PANEL_HEIGHT, PANEL_WIDTH};
 
 /// Same size as the real panel (64 columns, 32 rows).
-const PANEL_SIZE: Size = Size::new(64, 32);
+const PANEL_SIZE: Size = Size::new(PANEL_WIDTH, PANEL_HEIGHT);
 
 /// The simulated LED matrix: draw on it, then [`Matrix::show`] the frame.
 pub struct Matrix {
@@ -50,7 +51,7 @@ impl Matrix {
         // the signal and stops the app cleanly, as on the Pi.
         if self.window.events().any(|event| event == SimulatorEvent::Quit) {
             info!("Simulator window closed");
-            // Safety: `raise` has no precondition, it only sends a signal to this thread.
+            // SAFETY: `raise` has no precondition, it only sends a signal to this thread.
             unsafe { libc::raise(libc::SIGINT) };
         }
 

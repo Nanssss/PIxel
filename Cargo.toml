@@ -34,6 +34,11 @@ yup-oauth2 = "12.1.0"
 # `cargo run --features simulator` (needs SDL2: `sudo apt install libsdl2-dev`)
 simulator = ["dep:embedded-graphics-simulator", "dep:libc"]
 
+# Extra lints, checked by `cargo clippy` on the whole project
+[lints.clippy]
+# Every `unsafe` block or `unsafe impl` must say why it is sound, in a `// SAFETY:` comment
+undocumented_unsafe_blocks = "warn"
+
 # Only compiled by `cargo test`
 [dev-dependencies]
 serde_json = "1.0.140"

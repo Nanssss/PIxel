@@ -2,7 +2,7 @@ use serde::Deserialize;
 use reqwest::Client;
 use tokio::time::Duration;
 use crate::states::{AppContext, State};
-use crate::states::feed::{Feed, Fetcher};
+use crate::feed::{Feed, Fetcher};
 use crate::matrix::Matrix;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use tracing::{trace, info};
@@ -195,7 +195,8 @@ impl Fetcher for ForecastFetcher {
 
         let forecast = Forecast::from(response.daily);
 
-        info!("[WEATHER] - Condition: {:?}, Max Temp: {}°C, Min Temp: {}°C, Precipitation Sum: {} mm",
+        // No "[WEATHER]" prefix needed: the log line already shows the module
+        info!("Forecast: {:?}, {}°C max, {}°C min, {} mm of precipitation",
             forecast.condition, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
 
         Ok(forecast)

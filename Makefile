@@ -35,7 +35,7 @@ deploy: target
 	# the app couldn't write new log files once its privileges are dropped
 	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)/logs $(TARGET_DIR)/in"
 	scp $(IN_FILES) $(TARGET_HOST):$(TARGET_DIR)/in/
-	scp -r target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
+	scp target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
 	@echo "==> Deployment complete!"
 
 # Install the systemd service on the Pi

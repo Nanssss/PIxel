@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 use tracing::{info, warn};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use super::wrapper::{Canvas, MatrixOptions, RgbLedMatrix, RuntimeOptions};
+use super::{PANEL_HEIGHT, PANEL_WIDTH};
 
 /// The LED matrix as the app sees it: draw on it, then [`Matrix::show`] the frame.
 pub struct Matrix {
@@ -32,8 +33,9 @@ impl Matrix {
         // This project's panel. Fields not listed keep the library defaults
         // (`..Default::default()` fills the rest with zeros = library defaults).
         let options = MatrixOptions {
-            rows: 32,
-            cols: 64,
+            // The C library takes `int`s: `as` can't truncate these small constants
+            rows: PANEL_HEIGHT as i32,
+            cols: PANEL_WIDTH as i32,
             brightness: 100,
             // `c"..."` is a C-string literal (`&'static CStr`), `to_owned` makes a `CString`
             hardware_mapping: Some(c"adafruit-hat".to_owned()),
@@ -45,7 +47,7 @@ impl Matrix {
 
         let mut rgb_matrix = RgbLedMatrix::new(options, &rt_options)?;
 
-        // Safety: the canvas is stored next to `rgb_matrix` and never leaves
+        // SAFETY: the canvas is stored next to `rgb_matrix` and never leaves
         // `Matrix`, so it can't be used after the matrix is dropped.
         let offscreen = unsafe { rgb_matrix.create_offscreen_canvas() };
 

@@ -24,3 +24,8 @@ pub use display::Matrix;
 mod simulator;
 #[cfg(feature = "simulator")]
 pub use simulator::Matrix;
+
+/// Size of the panel, in pixels (shared by `display` and `simulator`).
+// `u32`: the type `embedded-graphics` uses for sizes
+const PANEL_WIDTH: u32 = 64;
+const PANEL_HEIGHT: u32 = 32;

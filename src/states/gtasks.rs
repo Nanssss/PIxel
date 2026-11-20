@@ -1,7 +1,7 @@
 use crate::states::{AppContext, State};
-use crate::states::feed::{Feed, Fetcher};
 use crate::google_auth::GoogleAuth;
 use crate::matrix::Matrix;
+use crate::feed::{Feed, Fetcher};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
 use tokio::time::Duration;
@@ -204,14 +204,15 @@ impl Fetcher for TasksFetcher {
 /// Logs the given tasks
 fn log_tasks(tasks: &[GTask]) {
     /* Print number of tasks */
-    info!("[GOOGLE TASKS] - Found {} Tasks", tasks.len());
+    // No "[GOOGLE TASKS]" prefix needed: the log line already shows the module
+    info!("Found {} tasks", tasks.len());
 
     /* Print each task */
     for task in tasks {
-        debug!("[GOOGLE TASKS] - Task: {} ({:?})", task.title, task.start);
+        debug!("Task: {} ({:?})", task.title, task.start);
 
         if let Some(description) = &task.description {
-            debug!("[GOOGLE TASKS] - Task description: {}", description);
+            debug!("Task description: {description}");
         }
     }
 }

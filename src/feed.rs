@@ -1,8 +1,13 @@
+//! Background fetching, shared by the states that get their data from the network.
+//!
+//! A state provides a [`Fetcher`] (how to fetch its data), and gets back a [`Feed`]
+//! (the latest data fetched), updated by a background task.
+
 use std::sync::Arc;
 use anyhow::{Context, Result};
 use tokio::sync::watch;
 use tokio::time::{sleep, timeout, Duration, Instant};
-use tracing::error;
+use tracing::warn;
 
 /// Wait before fetching again after a first failed fetch (e.g. no network at boot).
 /// Doubled after each further failure in a row (see `fetch_loop`).
@@ -171,7 +176,8 @@ async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Fetched
                 let delay = retry_delay.min(F::REFRESH_PERIOD);
                 retry_delay = delay * 2;
 
-                error!("Failed to fetch {}, retrying in {delay:?}: {e:#}", F::NAME);
+                // `warn!` rather than `error!`: the failure is handled (retried later)
+                warn!("Failed to fetch {}, retrying in {delay:?}: {e:#}", F::NAME);
                 delay
             }
         };
