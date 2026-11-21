@@ -74,6 +74,10 @@ The first time: `make deploy`, then `make install`, then `make run`.
 
 The app needs root to drive the GPIO: the service starts it as root, and it drops its privileges right after creating the matrix.
 
+## Before committing
+
+Format the code with `cargo fmt` (rules in `rustfmt.toml`).
+
 # License
 
 This project is an open-source software licensed under the **GNU General Public License v2.0**.

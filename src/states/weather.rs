@@ -74,6 +74,8 @@ impl Condition {
     /// Returns the condition matching a WMO weather code.
     ///
     /// Codes used by the weather API: <https://open-meteo.com/en/docs#weathervariables>
+    // `rustfmt::skip`: the match reads as a lookup table, keep its columns aligned
+    #[rustfmt::skip]
     fn from_wmo(code: u8) -> Self {
         match code {
             0 | 1               => Condition::Clear,        // clear, mainly clear
