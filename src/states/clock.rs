@@ -30,7 +30,7 @@ const CENTERED: TextStyle = TextStyleBuilder::new()
 /// Config of the clock: the `[clock]` section of `config.toml`.
 // `#[serde(default)]`: a field missing from the config file takes its value from
 // the `Default` implementation below, instead of making the whole file invalid.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct ClockConfig {
     enabled: bool,

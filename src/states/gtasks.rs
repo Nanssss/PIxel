@@ -27,10 +27,10 @@ const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.ev
 /// Config of the Google tasks: the `[gtasks]` section of `config.toml`.
 // `#[serde(default)]`: a field missing from the config file takes its value from
 // the `Default` implementation below, instead of making the whole file invalid.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct GTasksConfig {
-    pub enabled: bool,
+    enabled: bool,
 }
 
 /// Config used when the section, or one of its fields, is missing: the tasks are shown.

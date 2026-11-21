@@ -8,7 +8,7 @@ use serde::Deserialize;
 use std::fs;
 use tracing::warn;
 
-use crate::EXECUTABLE_DIR;
+use crate::paths::EXECUTABLE_DIR;
 use crate::states::clock::ClockConfig;
 use crate::states::gtasks::GTasksConfig;
 use crate::states::weather::WeatherConfig;
@@ -20,7 +20,7 @@ const CONFIG_FILE_PATH: &str = "in/config.toml";
 // `Default` can be derived because every field type implements `Default`.
 // `#[serde(default)]`: a section missing from the file takes its default config,
 // instead of making the whole file invalid.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
     pub clock: ClockConfig,
@@ -48,9 +48,9 @@ impl AppConfig {
 
         // `with_context` takes a closure: the message is only built if there is an error
         let content = fs::read_to_string(&config_file_path)
-            .with_context(|| format!("failed to read {config_file_path:?}"))?;
+            .with_context(|| format!("failed to read {}", config_file_path.display()))?;
 
         toml::from_str(&content)
-            .with_context(|| format!("failed to deserialize {config_file_path:?}"))
+            .with_context(|| format!("failed to deserialize {}", config_file_path.display()))
     }
 }

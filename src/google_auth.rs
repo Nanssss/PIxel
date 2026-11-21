@@ -11,7 +11,7 @@ use yup_oauth2::{
     InstalledFlowReturnMethod,
 };
 
-use crate::EXECUTABLE_DIR;
+use crate::paths::EXECUTABLE_DIR;
 
 /// Application secret, relative to the executable directory. Generate this file
 /// from the Google Cloud console: <https://console.cloud.google.com/>
@@ -40,7 +40,12 @@ impl GoogleAuth {
         let secret_path = EXECUTABLE_DIR.join(CREDENTIALS_FILE);
         let secret = yup_oauth2::read_application_secret(&secret_path)
             .await
-            .with_context(|| format!("failed to read application secret {secret_path:?}"))?;
+            .with_context(|| {
+                format!(
+                    "failed to read application secret {}",
+                    secret_path.display()
+                )
+            })?;
 
         // *Installed flow*: on the first run, the user grants the access in a browser,
         // and Google redirects it to a local HTTP server started by the authenticator.

@@ -16,6 +16,7 @@ use tracing::{info, warn};
 
 use super::wrapper::{Canvas, MatrixOptions, RgbLedMatrix, RuntimeOptions};
 use super::{PANEL_HEIGHT, PANEL_WIDTH};
+use crate::paths::EXECUTABLE_DIR;
 
 /// The LED matrix as the app sees it: draw on it, then [`Matrix::show`] the frame.
 pub struct Matrix {
@@ -108,30 +109,30 @@ impl DrawTarget for Matrix {
 /// The app is started as root, which the matrix needs to access the GPIO. Right
 /// after creating it, the C library drops root privileges and switches to another
 /// user: by default `daemon`, which can't write the files of the app.
-/// We switch instead to the owner of the executable, i.e. the user who deployed it,
-/// and who also owns those files.
+/// We switch instead to the owner of the app directory, i.e. the user who deployed
+/// the app, and who also owns its files (config, tokens, logs).
 ///
 /// # Errors
-/// If the executable file can't be read.
+/// If the app directory can't be read.
 fn runtime_options() -> Result<RuntimeOptions> {
-    let exe = std::env::current_exe().context("failed to get the executable path")?;
-    let metadata =
-        std::fs::metadata(&exe).with_context(|| format!("failed to read the owner of {exe:?}"))?;
+    let metadata = EXECUTABLE_DIR
+        .metadata()
+        .with_context(|| format!("failed to read the owner of {}", EXECUTABLE_DIR.display()))?;
 
-    // `MetadataExt` (Unix only) gives the numeric user and group ids of the file
+    // `MetadataExt` (Unix only) gives the numeric user and group ids of the directory
     let (uid, gid) = (metadata.uid(), metadata.gid());
 
     // The C library reads "0" as a name, not as root's id: the lookup would fail and
     // the app would keep running as root anyway, after printing an error. Make it explicit.
     if uid == 0 || gid == 0 {
-        warn!("The executable belongs to root: privileges are kept, the app runs as root");
+        warn!("The app directory belongs to root: privileges are kept, the app runs as root");
         return Ok(RuntimeOptions {
             drop_privileges: -1, // -1: disabled (0 would mean "library default": on)
             ..Default::default()
         });
     }
 
-    info!("Root privileges will be dropped to uid {uid}, gid {gid} (owner of the executable)");
+    info!("Root privileges will be dropped to uid {uid}, gid {gid} (owner of the app directory)");
 
     // The C library accepts a user (group) name or its numeric id. A number never
     // contains a NUL byte, so `CString::new` can't fail here.

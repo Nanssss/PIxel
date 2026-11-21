@@ -3,11 +3,10 @@ mod config;
 mod feed;
 mod google_auth;
 mod matrix;
+mod paths;
 mod states;
 
 use std::io::IsTerminal;
-use std::path::PathBuf;
-use std::sync::LazyLock;
 
 use anyhow::{Context, Result};
 use tracing::{error, info};
@@ -19,20 +18,14 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
+use crate::paths::EXECUTABLE_DIR;
+
 /// Name of the app, used as the prefix of the log files
 const APP_NAME: &str = "PIxel";
 /// Log directory, relative to the executable directory
 const LOG_DIR: &str = "logs";
 /// Number of daily log files kept: older ones are deleted, so the SD card never fills up
 const LOG_FILES_KEPT: usize = 7;
-/// Directory of the executable, whatever the current directory is when it is started.
-pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-    std::env::current_exe()
-        .expect("Failed to get current executable path")
-        .parent()
-        .expect("Executable has no parent directory")
-        .to_path_buf()
-});
 
 // =================================================================
 //    main function                                                |

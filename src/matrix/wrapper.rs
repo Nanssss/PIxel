@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 use std::ffi::{CStr, CString, c_char};
+use std::path::Path;
 
 use anyhow::{Context, Result, bail};
 
@@ -138,13 +139,15 @@ impl Font {
     ///
     /// # Errors
     /// If `path` contains a NUL byte, or if the C library can't load the font.
-    pub fn load(path: &str) -> Result<Self> {
-        let c_path = CString::new(path).context("invalid font path")?;
+    pub fn load(path: &Path) -> Result<Self> {
+        // A path isn't always valid UTF-8: its raw bytes are what C expects
+        let c_path =
+            CString::new(path.as_os_str().as_encoded_bytes()).context("invalid font path")?;
         // SAFETY: `c_path` is a valid C string, alive during the whole call.
         let ptr = unsafe { ffi::load_font(c_path.as_ptr()) };
         if ptr.is_null() {
             // `bail!(...)` is anyhow's shortcut for `return Err(anyhow!(...))`
-            bail!("failed to load font from {path}");
+            bail!("failed to load font from {}", path.display());
         }
         Ok(Self { ptr })
     }

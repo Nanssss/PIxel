@@ -39,7 +39,8 @@ pub trait Fetcher: Send + 'static {
     /// Age past which the data is too old to be displayed: the feed then has nothing
     /// to give until a fetch succeeds again (e.g. after a long network outage).
     ///
-    /// Must be longer than `REFRESH_PERIOD`, or the data would expire between two fetches.
+    /// Must be longer than `REFRESH_PERIOD`, or the data would expire between two fetches
+    /// (checked at compile time by `Feed::spawn`).
     const MAX_AGE: Duration;
 
     /// Time after which a fetch that hangs is abandoned
@@ -108,6 +109,16 @@ impl<T> Feed<T> {
         F: Fetcher<Data = T>,
         T: Send + Sync + 'static,
     {
+        // A `const` block is evaluated at compile time, once for each fetcher type:
+        // a wrong pair of constants doesn't build. `as_nanos` because comparing two
+        // `Duration`s with `>` isn't allowed in a `const` context yet.
+        const {
+            assert!(
+                F::MAX_AGE.as_nanos() > F::REFRESH_PERIOD.as_nanos(),
+                "Fetcher::MAX_AGE must be longer than Fetcher::REFRESH_PERIOD"
+            );
+        }
+
         // `None`: nothing has been fetched yet
         let (tx, rx) = watch::channel(None);
 

@@ -23,14 +23,14 @@ const DAILY_VARIABLES: &str =
 /// Config of the weather: the `[weather]` section of `config.toml`.
 // `#[serde(default)]`: a field missing from the config file takes its value from
 // the `Default` implementation below, instead of making the whole file invalid.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct WeatherConfig {
     enabled: bool,
     /// Place the forecast is fetched for, in decimal degrees (north is positive)
-    pub latitude: f64,
+    latitude: f64,
     /// Place the forecast is fetched for, in decimal degrees (east is positive)
-    pub longitude: f64,
+    longitude: f64,
 }
 
 /// Config used when the section, or one of its fields, is missing: the weather at the coordinates below.

@@ -11,7 +11,7 @@ After=network.target
 
 [Service]
 # No `User=`: the app starts as root (needed for the GPIO), then drops its
-# privileges itself, to the owner of the executable.
+# privileges itself, to the owner of the app directory.
 WorkingDirectory=@TARGET_DIR@
 ExecStart=@TARGET_DIR@/@BINARY_NAME@
 
