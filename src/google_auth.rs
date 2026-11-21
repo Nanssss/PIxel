@@ -5,12 +5,13 @@
 //! them once they have expired.
 
 use anyhow::{Context, Result};
-use yup_oauth2::{DefaultHyperClientBuilder, HyperClientBuilder, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 use yup_oauth2::authenticator::Authenticator;
+use yup_oauth2::{DefaultHyperClientBuilder, HyperClientBuilder, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
+
 use crate::EXECUTABLE_DIR;
 
 /// Application secret, relative to the executable directory. Generate this file
-/// from the Google Cloud console: https://console.cloud.google.com/
+/// from the Google Cloud console: <https://console.cloud.google.com/>
 const CREDENTIALS_FILE: &str = "in/credentials.json";
 
 /// Where the tokens are cached, relative to the executable directory

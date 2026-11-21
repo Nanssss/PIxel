@@ -1,25 +1,29 @@
-use crate::states::{AppContext, State};
-use crate::google_auth::GoogleAuth;
-use crate::matrix::Matrix;
-use crate::feed::{Feed, Fetcher};
+//! The Google tasks state: shows the next events of the user's Google calendar.
+//!
+//! The events are fetched in the background (see `feed.rs`) from the Google
+//! Calendar API, with the OAuth2 tokens of `google_auth.rs`.
+
+use anyhow::{Context, Result};
+use chrono::{DateTime, Local, NaiveDate, Utc};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
-use tokio::time::Duration;
 use serde::Deserialize;
-use tracing::{trace, info, debug, error};
-use anyhow::{Result, Context};
-use chrono::{DateTime, Local, NaiveDate, Utc};
+use tokio::time::Duration;
+use tracing::{debug, error, info, trace};
+
+use crate::feed::{Feed, Fetcher};
+use crate::google_auth::GoogleAuth;
+use crate::matrix::Matrix;
+use crate::states::{AppContext, State};
 
 /// Events of the user's main calendar.
-/// Doc: https://developers.google.com/workspace/calendar/api/v3/reference/events/list
+/// Doc: <https://developers.google.com/workspace/calendar/api/v3/reference/events/list>
 const GCALENDAR_EVENTS_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
-/*
-    Add the GCALENDAR scopes you need here.
-    (find them at https://developers.google.com/workspace/calendar/api/auth?hl=fr)
-*/
+/// Access asked to the user: read only the calendar events.
+/// Other scopes: <https://developers.google.com/workspace/calendar/api/auth>
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
-/// Public struct containing gtasks config
+/// Config of the Google tasks: the `[gtasks]` section of `config.toml`.
 // `#[serde(default)]`: a field missing from the config file takes its value from
 // the `Default` implementation below, instead of making the whole file invalid.
 #[derive(Debug, Clone, Deserialize)]
@@ -28,7 +32,7 @@ pub struct GTasksConfig {
     pub enabled: bool,
 }
 
-/// Default values for config
+/// Config used when the section, or one of its fields, is missing: the tasks are shown.
 impl Default for GTasksConfig {
     fn default() -> Self {
         GTasksConfig {
@@ -37,7 +41,7 @@ impl Default for GTasksConfig {
     }
 }
 
-/// Atomic task
+/// One task to show: an event of the calendar.
 ///
 /// Read as is from the JSON of the API: each field is taken from the event field
 /// of the same name, unless `rename` gives another one.
@@ -68,7 +72,7 @@ enum TaskStart {
     },
 }
 
-/// Public struct containing global gtasks state
+/// Shows the next tasks of the user's calendar.
 ///
 /// The state never fetches anything itself: a background task (see `Feed::spawn`) does,
 /// and the state only reads the latest tasks it published.
@@ -83,18 +87,17 @@ pub struct GTasksState {
 // =================================================================
 
 impl GTasksState {
-    /// GTasksState constructor: starts the background task fetching the tasks.
+    /// Creates the state, and starts the background task fetching the tasks.
     ///
     /// Returns `None` if the state is turned off in the config, or failed to start.
     /// Only the OAuth2 authenticator is prepared here (it reads local files). Nothing
     /// is fetched: the state isn't ready until the first tasks arrive.
     pub async fn new(config: GTasksConfig, context: &AppContext) -> Option<Self> {
-        /* A state turned off in the config is never built: its task is never started */
+        // A state turned off in the config is never built: its task is never started
         if !config.enabled {
             return None;
         }
 
-        /* If in the future the request needs config, pass it &config */
         // `inspect_err` logs the error without consuming it, `ok()` turns the `Result`
         // into an `Option`, and `?` returns `None` right away if there is no value.
         let auth = GoogleAuth::new().await
@@ -108,7 +111,7 @@ impl GTasksState {
             auth,
         };
 
-        /* Start the background task: returns immediately */
+        // Start the background task: returns immediately
         Some(GTasksState {
             tasks: Feed::spawn(fetcher),
         })
@@ -121,7 +124,7 @@ impl State for GTasksState {
         self.tasks.latest().is_some()
     }
 
-    /// Method for drawing the state to the screen
+    /// Placeholder until the tasks are drawn: fills the panel in blue.
     fn draw(&self, matrix: &mut Matrix) {
         // The app only draws a state that is ready, so the `else` is a safety net
         // (the tasks may expire right between the two calls)
@@ -161,10 +164,10 @@ impl Fetcher for TasksFetcher {
 
     /// Fetches the next tasks from the GCalendar API
     async fn fetch(&mut self) -> Result<Vec<GTask>> {
-        /* Get the access token (from the cache, unless a new one is needed) */
+        // Get the access token (from the cache, unless a new one is needed)
         let token = self.auth.token(GCALENDAR_SCOPES).await?;
 
-        /* Request parameters */
+        // Request parameters
         let query_params = &[
             ("maxResults",      "5"),
             ("orderBy",         "startTime"),
@@ -172,7 +175,7 @@ impl Fetcher for TasksFetcher {
             ("timeMin",         &Utc::now().to_rfc3339()), // get current time in RFC3339 format
         ];
 
-        /* Send GET request to GTASKS API, and deserialize the JSON of the response */
+        // Send the GET request, and deserialize the JSON of the response
         let response: TasksResponse = self.client
             .get(GCALENDAR_EVENTS_URL)
             .bearer_auth(token)     // adds the header `Authorization: Bearer <token>`
@@ -201,13 +204,11 @@ impl Fetcher for TasksFetcher {
 //    Static functions                                             |
 // =================================================================
 
-/// Logs the given tasks
+/// Logs how many tasks were fetched, and each of them at the `debug` level.
 fn log_tasks(tasks: &[GTask]) {
-    /* Print number of tasks */
     // No "[GOOGLE TASKS]" prefix needed: the log line already shows the module
     info!("Found {} tasks", tasks.len());
 
-    /* Print each task */
     for task in tasks {
         debug!("Task: {} ({:?})", task.title, task.start);
 
@@ -221,8 +222,6 @@ fn log_tasks(tasks: &[GTask]) {
 // =================================================================
 //    Private types                                                |
 // =================================================================
-
-/* The following type is used for deserialization */
 
 /// Response of the GCalendar API.
 // Only the field we use is declared: serde ignores the other ones of the JSON.

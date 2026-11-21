@@ -4,20 +4,6 @@
 # Ignore compiled binary files
 target/
 
-# Ignore local environment configuration files
-.cargo/config
-
-# Ignore Cargo cache files
-.cargo/registry/cache/
-.cargo/registry/index/
-.cargo/registry/src/
-
-# Ignore Git database files within Cargo
-.cargo/git/db/
-
-# Ignore generated documentation files
-docs/
-
 # Ignore log files
 *.log
 logs/
@@ -27,6 +13,6 @@ log/
 .vscode/
 *.vim
 
-# Ignore credentials file
+# Ignore the Google OAuth2 secret and token cache
 credentials.json
 tokencache.json

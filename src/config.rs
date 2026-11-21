@@ -7,6 +7,7 @@ use std::fs;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use tracing::warn;
+
 use crate::EXECUTABLE_DIR;
 use crate::states::clock::ClockConfig;
 use crate::states::gtasks::GTasksConfig;
@@ -15,7 +16,7 @@ use crate::states::weather::WeatherConfig;
 /// Config file path, relative to the executable directory
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
-/// Struct used to match the TOML file
+/// The whole config: one section per state (`[clock]`, `[weather]`...).
 // `Default` can be derived because every field type implements `Default`.
 // `#[serde(default)]`: a section missing from the file takes its default config,
 // instead of making the whole file invalid.

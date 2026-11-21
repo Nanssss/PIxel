@@ -1,20 +1,25 @@
-use serde::Deserialize;
+//! The weather state: shows the forecast of the day for the place set in the config.
+//!
+//! The forecast is fetched in the background (see `feed.rs`) from the Open-Meteo API.
+
+use anyhow::{Context, Result};
+use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
+use serde::Deserialize;
 use tokio::time::Duration;
-use crate::states::{AppContext, State};
+use tracing::{info, trace};
+
 use crate::feed::{Feed, Fetcher};
 use crate::matrix::Matrix;
-use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
-use tracing::{trace, info};
-use anyhow::{Result, Context};
+use crate::states::{AppContext, State};
 
-/// Weather API (Open-Meteo: free, no key needed). Doc: https://open-meteo.com/en/docs
+/// Weather API (Open-Meteo: free, no key needed). Doc: <https://open-meteo.com/en/docs>
 const WEATHER_API_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
 /// Daily values asked to the weather API: must match the fields of `DailyData`
 const DAILY_VARIABLES: &str = "weather_code,apparent_temperature_max,apparent_temperature_min,precipitation_sum";
 
-/// Public struct containing weather config
+/// Config of the weather: the `[weather]` section of `config.toml`.
 // `#[serde(default)]`: a field missing from the config file takes its value from
 // the `Default` implementation below, instead of making the whole file invalid.
 #[derive(Debug, Clone, Deserialize)]
@@ -27,7 +32,7 @@ pub struct WeatherConfig {
     pub longitude: f64,
 }
 
-/// Default values for config
+/// Config used when the section, or one of its fields, is missing: the weather at the coordinates below.
 impl Default for WeatherConfig {
     fn default() -> Self {
         WeatherConfig{
@@ -38,7 +43,7 @@ impl Default for WeatherConfig {
     }
 }
 
-/// Forecast of the day
+/// Forecast of the day, as shown on the panel.
 #[derive(Debug)]
 struct Forecast {
     condition:          Condition,  // weather of the day: tells which icon to draw
@@ -47,7 +52,7 @@ struct Forecast {
     precipitation_sum:  f32,        // sum of daily precipitations (rain, snow, hail), in mm
 }
 
-/// Weather of the day
+/// Weather of the day, grouped by the icon that shows it.
 ///
 /// The weather API describes it with a *WMO code*, which is far more detailed (light,
 /// moderate or heavy rain, freezing rain, rain showers...): see `Condition::from_wmo`.
@@ -68,7 +73,7 @@ enum Condition {
 impl Condition {
     /// Returns the condition matching a WMO weather code.
     ///
-    /// Codes used by the weather API: https://open-meteo.com/en/docs#weathervariables
+    /// Codes used by the weather API: <https://open-meteo.com/en/docs#weathervariables>
     fn from_wmo(code: u8) -> Self {
         match code {
             0 | 1               => Condition::Clear,        // clear, mainly clear
@@ -85,7 +90,7 @@ impl Condition {
 }
 
 
-/// Public struct containing global weather state
+/// Shows the forecast of the day.
 ///
 /// The state never fetches anything itself: a background task (see `Feed::spawn`) does,
 /// and the state only reads the latest forecast it published.
@@ -99,12 +104,12 @@ pub struct WeatherState {
 // =================================================================
 
 impl WeatherState {
-    /// WeatherState constructor: starts the background task fetching the forecast.
+    /// Creates the state, and starts the background task fetching the forecast.
     ///
     /// Returns `None` if the state is turned off in the config.
     /// Nothing is fetched here: the state isn't ready until the first forecast arrives.
     pub fn new(config: WeatherConfig, context: &AppContext) -> Option<Self> {
-        /* A state turned off in the config is never built: its task is never started */
+        // A state turned off in the config is never built: its task is never started
         if !config.enabled {
             return None;
         }
@@ -117,7 +122,7 @@ impl WeatherState {
             longitude:  config.longitude,
         };
 
-        /* Start the background task: returns immediately */
+        // Start the background task: returns immediately
         Some(WeatherState {
             forecast: Feed::spawn(fetcher),
         })
@@ -130,7 +135,7 @@ impl State for WeatherState {
         self.forecast.latest().is_some()
     }
 
-    /// Method for drawing the state to the screen
+    /// Placeholder until the forecast is drawn: fills the panel in green.
     fn draw(&self, matrix: &mut Matrix) {
         // The app only draws a state that is ready, so the `else` is a safety net
         // (the forecast may expire right between the two calls)
@@ -167,7 +172,7 @@ impl Fetcher for ForecastFetcher {
 
     /// Fetches the forecast of the day from the weather API
     async fn fetch(&mut self) -> Result<Forecast> {
-        /* Request parameters */
+        // Request parameters
         let latitude = self.latitude.to_string();
         let longitude = self.longitude.to_string();
         let query_params = &[
@@ -178,7 +183,7 @@ impl Fetcher for ForecastFetcher {
             ("forecast_days",   "1"),       // today only
         ];
 
-        /* Send HTTP GET request, and deserialize the JSON of the response */
+        // Send the GET request, and deserialize the JSON of the response
         let response: WeatherResponse = self.client
             .get(WEATHER_API_URL)
             .query(query_params)
@@ -206,8 +211,6 @@ impl Fetcher for ForecastFetcher {
 // =================================================================
 //    Private types                                                |
 // =================================================================
-
-/* The following types are used for deserialization */
 
 /// Response of the weather API.
 // Only the fields we use are declared: serde ignores the other ones of the JSON.

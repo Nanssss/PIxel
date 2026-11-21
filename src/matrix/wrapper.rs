@@ -8,9 +8,11 @@
 // The wrapper exposes the full C API, even the parts the app doesn't use yet.
 #![allow(dead_code)]
 
+use std::ffi::{c_char, CStr, CString};
+
+use anyhow::{bail, Context, Result};
+
 use super::ffi::{self, Color};
-use anyhow::{Context, Result, bail};
-use std::ffi::{CStr, CString, c_char};
 
 // About both option structs below:
 // **`0` / `false` / `None` means "library default", not zero**: the C API only
@@ -116,7 +118,7 @@ impl Canvas {
     }
 }
 
-/// A loaded BDF font wrapper.
+/// A BDF font loaded by the C library, to draw text with [`Canvas::draw_text`].
 ///
 /// Invariant: `ptr` is never null (`load` returns an error instead), and is only
 /// freed by `drop`.

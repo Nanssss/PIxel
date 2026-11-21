@@ -9,9 +9,11 @@
 use core::convert::Infallible;
 use std::ffi::CString;
 use std::os::unix::fs::MetadataExt;
+
 use anyhow::{Context, Result};
-use tracing::{info, warn};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
+use tracing::{info, warn};
+
 use super::wrapper::{Canvas, MatrixOptions, RgbLedMatrix, RuntimeOptions};
 use super::{PANEL_HEIGHT, PANEL_WIDTH};
 
@@ -98,7 +100,7 @@ impl DrawTarget for Matrix {
     }
 }
 
-/// Runtime options of the matrix
+/// Runtime options of the matrix: which user the app runs as once started.
 ///
 /// The app is started as root, which the matrix needs to access the GPIO. Right
 /// after creating it, the C library drops root privileges and switches to another

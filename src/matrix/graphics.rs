@@ -12,7 +12,9 @@
 //! The app draws on `Matrix` (see `display.rs`), which forwards to its offscreen `Canvas`.
 
 use core::convert::Infallible;
+
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
+
 use super::ffi::Color;
 use super::wrapper::Canvas;
 

@@ -4,6 +4,7 @@
 //! (the latest data fetched), updated by a background task.
 
 use std::sync::Arc;
+
 use anyhow::{Context, Result};
 use tokio::sync::watch;
 use tokio::time::{sleep, timeout, Duration, Instant};
@@ -107,7 +108,7 @@ impl<T> Feed<T> {
         F: Fetcher<Data = T>,
         T: Send + Sync + 'static,
     {
-        /* `None`: nothing has been fetched yet */
+        // `None`: nothing has been fetched yet
         let (tx, rx) = watch::channel(None);
 
         // `tokio::spawn` starts the task and returns immediately.
@@ -187,7 +188,7 @@ async fn fetch_loop<F: Fetcher>(mut fetcher: F, tx: watch::Sender<Option<Fetched
         // one that completes (the other future is simply dropped).
         tokio::select! {
             _ = sleep(delay) => {}
-            /* `closed()` completes once every `Receiver` is dropped: nobody reads anymore */
+            // `closed()` completes once every `Receiver` is dropped: nobody reads anymore
             _ = tx.closed() => return,
         }
     }

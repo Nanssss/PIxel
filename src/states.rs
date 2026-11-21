@@ -7,8 +7,9 @@ pub mod clock;
 pub mod gtasks;
 pub mod weather;
 
-use reqwest::Client;
 use anyhow::{Context, Result};
+use reqwest::Client;
+
 use crate::matrix::Matrix;
 
 /// Something the app can show on the matrix (the clock, the weather...).
@@ -45,9 +46,8 @@ pub struct AppContext {
     pub client: Client,
 }
 
-/// Method implementations for AppContext
 impl AppContext {
-    /// AppContext constructor
+    /// Creates the context: builds the HTTP client the states share.
     ///
     /// # Errors
     /// If the HTTP client can't be built (e.g. the TLS backend fails to start).

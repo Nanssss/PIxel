@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::time::{interval, Duration, Instant, MissedTickBehavior};
 use tracing::{info, warn};
+
 use crate::config::AppConfig;
 use crate::matrix::Matrix;
 use crate::states::{AppContext, State};
@@ -76,7 +77,7 @@ pub async fn run() -> Result<()> {
 //    App part                                                     |
 // =================================================================
 
-/// App struct
+/// The running app: the states of the rotation, and the matrix they are drawn on.
 struct App {
     /// States of the rotation, in display order. Never empty (see `build_states`).
     // A `Vec` can only hold values of a single type: `Box<dyn State>` is that type,
@@ -87,29 +88,24 @@ struct App {
     matrix:     Matrix,
 }
 
-/// App methods implementation
 impl App {
-    /// App constructor
+    /// Builds the app: creates the matrix, loads the config, then builds the states.
+    /// Starts on the first state of the rotation.
     ///
     /// # Errors
     /// If the HTTP client or the matrix can't be created.
     async fn new() -> Result<Self> {
-        /* Build matrix */
         let matrix = Matrix::new().context("failed to init the LED matrix")?;
 
-        /* Build config */
         let config = AppConfig::load_or_default();
         info!("config:\n{config:?}");
 
-        /* Build context */
         // Only needed while the states are built: each background task keeps its own handle on it
         let context = AppContext::new()?;
 
-        /* Build states */
         // States that need the network start their background fetch task here.
         let states = build_states(config, &context).await;
 
-        /* Return constructed App, starting on the first state of the rotation */
         Ok(App {
             states,
             current: 0,
@@ -117,8 +113,8 @@ impl App {
         })
     }
 
-    /// Call draw() method of the current state, or blank the screen if that
-    /// state has nothing to display.
+    /// Draws one frame: the current state, or a black screen if that state has
+    /// nothing to display.
     ///
     /// The current state isn't ready in two cases:
     /// - its data just got too old: it is skipped at the next state switch;
@@ -141,7 +137,7 @@ impl App {
         self.matrix.show();
     }
 
-    /// Switch to the next state that is ready to be displayed.
+    /// Switches to the next state that is ready to be displayed.
     ///
     /// Never waits: the data is fetched by the background task of each state. A state
     /// that isn't ready is skipped, and gets its chance again on the next rotation.
@@ -155,7 +151,7 @@ impl App {
             .map(|offset| (self.current + offset) % count)
             .find(|&index| self.states[index].is_ready());
 
-        /* No candidate is ready: keep the current state */
+        // No candidate is ready: keep the current state
         if let Some(index) = next {
             self.current = index;
         }
@@ -187,7 +183,7 @@ async fn build_states(config: AppConfig, context: &AppContext) -> Vec<Box<dyn St
         states.push(Box::new(gtasks));
     }
 
-    /* No state is enabled: fall back to the clock, whatever the config says */
+    // No state is enabled: fall back to the clock, whatever the config says
     if states.is_empty() {
         warn!("No state is enabled! Falling back to Clock.");
         states.push(Box::new(ClockState));

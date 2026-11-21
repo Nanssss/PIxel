@@ -7,10 +7,12 @@
 //! Usage: `cargo run --features simulator` (needs SDL2: `sudo apt install libsdl2-dev`).
 
 use core::convert::Infallible;
+
 use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
 use tracing::info;
+
 use super::{PANEL_HEIGHT, PANEL_WIDTH};
 
 /// Same size as the real panel (64 columns, 32 rows).
