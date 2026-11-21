@@ -48,7 +48,10 @@ fn main() {
         .arg(format!("--eval=vpath %.h {}", lib_dir.display()))
         // paths the Makefile defines relative to lib/, made absolute
         .arg(format!("INCDIR={}", include_dir.display()))
-        .arg(format!("RP1_PIO_VENDOR_DIR={}", lib_dir.join("rp1/rp1_pio_vendor").display()))
+        .arg(format!(
+            "RP1_PIO_VENDOR_DIR={}",
+            lib_dir.join("rp1/rp1_pio_vendor").display()
+        ))
         .arg("librgbmatrix.a")
         .arg("LTO_FLAGS=")
         .arg(format!("CC={cc}"))
@@ -74,7 +77,10 @@ fn main() {
     println!("cargo:rerun-if-changed={}", wrapper_path.display());
     println!("cargo:rerun-if-changed={}", include_dir.display());
     println!("cargo:rerun-if-changed={}", lib_dir.display());
-    println!("cargo:rerun-if-changed={}", matrix_dir.join("config.mk").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        matrix_dir.join("config.mk").display()
+    );
 
     // Generate bindings using bindgen
     // bindgen reads TARGET and BINDGEN_EXTRA_CLANG_ARGS_<target> automatically

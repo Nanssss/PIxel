@@ -5,7 +5,7 @@
 
 use chrono::Local;
 use embedded_graphics::{
-    mono_font::{ascii::FONT_6X10, MonoTextStyle},
+    mono_font::{MonoTextStyle, ascii::FONT_6X10},
     pixelcolor::Rgb888,
     prelude::*,
     primitives::PrimitiveStyle,
@@ -39,9 +39,7 @@ pub struct ClockConfig {
 /// Config used when the section, or one of its fields, is missing: the clock is shown.
 impl Default for ClockConfig {
     fn default() -> Self {
-        ClockConfig {
-            enabled: true,
-        }
+        ClockConfig { enabled: true }
     }
 }
 
@@ -52,10 +50,9 @@ impl Default for ClockConfig {
 // A *unit struct*: a type without any field, only there to carry the `State` implementation.
 pub struct ClockState;
 
-
-// ================================================================= 
+// =================================================================
 //    Methods implementation                                       |
-// ================================================================= 
+// =================================================================
 
 impl ClockState {
     /// Creates the clock, or returns `None` if it is turned off in the config.

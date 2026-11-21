@@ -17,7 +17,8 @@ use crate::states::{AppContext, State};
 const WEATHER_API_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
 /// Daily values asked to the weather API: must match the fields of `DailyData`
-const DAILY_VARIABLES: &str = "weather_code,apparent_temperature_max,apparent_temperature_min,precipitation_sum";
+const DAILY_VARIABLES: &str =
+    "weather_code,apparent_temperature_max,apparent_temperature_min,precipitation_sum";
 
 /// Config of the weather: the `[weather]` section of `config.toml`.
 // `#[serde(default)]`: a field missing from the config file takes its value from
@@ -35,7 +36,7 @@ pub struct WeatherConfig {
 /// Config used when the section, or one of its fields, is missing: the weather at the coordinates below.
 impl Default for WeatherConfig {
     fn default() -> Self {
-        WeatherConfig{
+        WeatherConfig {
             enabled: true,
             latitude: 43.57,
             longitude: 1.46,
@@ -46,10 +47,10 @@ impl Default for WeatherConfig {
 /// Forecast of the day, as shown on the panel.
 #[derive(Debug)]
 struct Forecast {
-    condition:          Condition,  // weather of the day: tells which icon to draw
-    temp_max:           f32,        // maximum daily temperature, in °C
-    temp_min:           f32,        // minimum daily temperature, in °C
-    precipitation_sum:  f32,        // sum of daily precipitations (rain, snow, hail), in mm
+    condition: Condition,   // weather of the day: tells which icon to draw
+    temp_max: f32,          // maximum daily temperature, in °C
+    temp_min: f32,          // minimum daily temperature, in °C
+    precipitation_sum: f32, // sum of daily precipitations (rain, snow, hail), in mm
 }
 
 /// Weather of the day, grouped by the icon that shows it.
@@ -91,15 +92,13 @@ impl Condition {
     }
 }
 
-
 /// Shows the forecast of the day.
 ///
 /// The state never fetches anything itself: a background task (see `Feed::spawn`) does,
 /// and the state only reads the latest forecast it published.
 pub struct WeatherState {
-    forecast:   Feed<Forecast>,     // latest forecast published by the background task
+    forecast: Feed<Forecast>, // latest forecast published by the background task
 }
-
 
 // =================================================================
 //    Methods implementation                                       |
@@ -119,9 +118,9 @@ impl WeatherState {
         // The background task must own everything it uses: cloning the client
         // only copies a handle, the connections stay shared (see `AppContext`).
         let fetcher = ForecastFetcher {
-            client:     context.client.clone(),
-            latitude:   config.latitude,
-            longitude:  config.longitude,
+            client: context.client.clone(),
+            latitude: config.latitude,
+            longitude: config.longitude,
         };
 
         // Start the background task: returns immediately
@@ -141,7 +140,9 @@ impl State for WeatherState {
     fn draw(&self, matrix: &mut Matrix) {
         // The app only draws a state that is ready, so the `else` is a safety net
         // (the forecast may expire right between the two calls)
-        let Some(_forecast) = self.forecast.latest() else { return };
+        let Some(_forecast) = self.forecast.latest() else {
+            return;
+        };
 
         let Ok(()) = matrix.clear(Rgb888::GREEN);
     }
@@ -156,9 +157,9 @@ impl State for WeatherState {
 /// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
 /// lives longer than the function that started it, so it can't borrow anything.
 struct ForecastFetcher {
-    client:     Client,     // HTTP client shared with the other states
-    latitude:   f64,        // place the forecast is fetched for (see `WeatherConfig`)
-    longitude:  f64,
+    client: Client, // HTTP client shared with the other states
+    latitude: f64,  // place the forecast is fetched for (see `WeatherConfig`)
+    longitude: f64,
 }
 
 impl Fetcher for ForecastFetcher {
@@ -178,15 +179,16 @@ impl Fetcher for ForecastFetcher {
         let latitude = self.latitude.to_string();
         let longitude = self.longitude.to_string();
         let query_params = &[
-            ("latitude",        latitude.as_str()),
-            ("longitude",       longitude.as_str()),
-            ("daily",           DAILY_VARIABLES),
-            ("timezone",        "auto"),    // the day starts at midnight, local time of the place
-            ("forecast_days",   "1"),       // today only
+            ("latitude", latitude.as_str()),
+            ("longitude", longitude.as_str()),
+            ("daily", DAILY_VARIABLES),
+            ("timezone", "auto"), // the day starts at midnight, local time of the place
+            ("forecast_days", "1"), // today only
         ];
 
         // Send the GET request, and deserialize the JSON of the response
-        let response: WeatherResponse = self.client
+        let response: WeatherResponse = self
+            .client
             .get(WEATHER_API_URL)
             .query(query_params)
             .send()
@@ -203,8 +205,10 @@ impl Fetcher for ForecastFetcher {
         let forecast = Forecast::from(response.daily);
 
         // No "[WEATHER]" prefix needed: the log line already shows the module
-        info!("Forecast: {:?}, {}°C max, {}°C min, {} mm of precipitation",
-            forecast.condition, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum);
+        info!(
+            "Forecast: {:?}, {}°C max, {}°C min, {} mm of precipitation",
+            forecast.condition, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum
+        );
 
         Ok(forecast)
     }
@@ -225,10 +229,10 @@ struct WeatherResponse {
 /// element per forecast day: we ask for a single day, so one element.
 #[derive(Debug, Deserialize)]
 struct DailyData {
-    weather_code:               [u8; 1],    // WMO code, see `Condition::from_wmo`
-    apparent_temperature_max:   [f32; 1],   // °C
-    apparent_temperature_min:   [f32; 1],   // °C
-    precipitation_sum:          [f32; 1],   // mm
+    weather_code: [u8; 1],              // WMO code, see `Condition::from_wmo`
+    apparent_temperature_max: [f32; 1], // °C
+    apparent_temperature_min: [f32; 1], // °C
+    precipitation_sum: [f32; 1],        // mm
 }
 
 /// Turns what the API sent into what the state displays.
@@ -237,10 +241,10 @@ struct DailyData {
 impl From<DailyData> for Forecast {
     fn from(daily: DailyData) -> Self {
         Forecast {
-            condition:          Condition::from_wmo(daily.weather_code[0]),
-            temp_max:           daily.apparent_temperature_max[0],
-            temp_min:           daily.apparent_temperature_min[0],
-            precipitation_sum:  daily.precipitation_sum[0],
+            condition: Condition::from_wmo(daily.weather_code[0]),
+            temp_max: daily.apparent_temperature_max[0],
+            temp_min: daily.apparent_temperature_min[0],
+            precipitation_sum: daily.precipitation_sum[0],
         }
     }
 }
@@ -298,9 +302,9 @@ mod tests {
         assert_eq!(Condition::from_wmo(48), Condition::Fog);
         assert_eq!(Condition::from_wmo(57), Condition::Drizzle);
         assert_eq!(Condition::from_wmo(67), Condition::Rain);
-        assert_eq!(Condition::from_wmo(82), Condition::Rain);     // rain showers
-        assert_eq!(Condition::from_wmo(86), Condition::Snow);     // snow showers
+        assert_eq!(Condition::from_wmo(82), Condition::Rain); // rain showers
+        assert_eq!(Condition::from_wmo(86), Condition::Snow); // snow showers
         assert_eq!(Condition::from_wmo(99), Condition::Thunderstorm);
-        assert_eq!(Condition::from_wmo(42), Condition::Unknown);  // not a code of the API
+        assert_eq!(Condition::from_wmo(42), Condition::Unknown); // not a code of the API
     }
 }

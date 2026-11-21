@@ -12,7 +12,12 @@ use std::sync::LazyLock;
 use anyhow::{Context, Result};
 use tracing::{error, info};
 use tracing_appender::{non_blocking::WorkerGuard, rolling};
-use tracing_subscriber::{filter::{EnvFilter, LevelFilter}, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    filter::{EnvFilter, LevelFilter},
+    fmt,
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+};
 
 /// Name of the app, used as the prefix of the log files
 const APP_NAME: &str = "PIxel";
@@ -29,9 +34,9 @@ pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
         .to_path_buf()
 });
 
-// ================================================================= 
+// =================================================================
 //    main function                                                |
-// ================================================================= 
+// =================================================================
 
 /// Sets up logging, then runs the app until it is asked to stop.
 ///
@@ -52,9 +57,9 @@ async fn main() -> Result<()> {
         .inspect_err(|e| error!("Fatal error: {e:#}"))
 }
 
-// ================================================================= 
+// =================================================================
 //    Static functions                                             |
-// ================================================================= 
+// =================================================================
 
 /// Sets up logging, to the console and to a daily log file.
 ///
@@ -82,21 +87,23 @@ fn init_logging() -> Result<WorkerGuard> {
     let console_layer = fmt::layer()
         .with_thread_names(true)
         .with_target(true)
-        .with_line_number(true)     // include line number
+        .with_line_number(true) // include line number
         // Colors only in a terminal: not in a file (`nohup.out`) or the systemd journal
         .with_ansi(std::io::stdout().is_terminal())
-        .compact();                 // shorter logs
+        .compact(); // shorter logs
 
     // 3. File layer
     let file_layer = fmt::layer()
-        .with_writer(non_blocking)  // async, non-blocking writes
-        .with_ansi(false)           // no ANSI codes in file
+        .with_writer(non_blocking) // async, non-blocking writes
+        .with_ansi(false) // no ANSI codes in file
         .event_format(
             fmt::format()
-            .with_thread_names(true)
-            .with_target(true)
-            .with_line_number(true) // include line number
-            .compact());            // either nothing (full), json, pretty, or compact
+                .with_thread_names(true)
+                .with_target(true)
+                .with_line_number(true) // include line number
+                // Line format: either nothing (full), json, pretty, or compact
+                .compact(),
+        );
 
     // 4. Filtering
     // default: info ; overridable by RUST_LOG=debug ./app

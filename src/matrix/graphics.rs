@@ -23,7 +23,11 @@ use super::wrapper::Canvas;
 /// Implementing `From` gives us `Into` for free, so we can write `color.into()`.
 impl From<Rgb888> for Color {
     fn from(color: Rgb888) -> Self {
-        Color { r: color.r(), g: color.g(), b: color.b() }
+        Color {
+            r: color.r(),
+            g: color.g(),
+            b: color.b(),
+        }
     }
 }
 

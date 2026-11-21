@@ -10,7 +10,9 @@ use core::convert::Infallible;
 
 use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
-use embedded_graphics_simulator::{OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
+use embedded_graphics_simulator::{
+    OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
+};
 use tracing::info;
 
 use super::{PANEL_HEIGHT, PANEL_WIDTH};
@@ -33,8 +35,8 @@ impl Matrix {
     /// `Matrix::new`, so that the app builds with either.
     pub fn new() -> Result<Self> {
         let settings = OutputSettingsBuilder::new()
-            .scale(12)          // each LED is a 12x12 square on the PC screen...
-            .pixel_spacing(3)   // ...with a dark gap between LEDs, like on the real panel
+            .scale(12) // each LED is a 12x12 square on the PC screen...
+            .pixel_spacing(3) // ...with a dark gap between LEDs, like on the real panel
             .build();
 
         Ok(Self {
@@ -51,7 +53,11 @@ impl Matrix {
 
         // Closing the window acts like a Ctrl+C: the frame loop (`app::run`) receives
         // the signal and stops the app cleanly, as on the Pi.
-        if self.window.events().any(|event| event == SimulatorEvent::Quit) {
+        if self
+            .window
+            .events()
+            .any(|event| event == SimulatorEvent::Quit)
+        {
             info!("Simulator window closed");
             // SAFETY: `raise` has no precondition, it only sends a signal to this thread.
             unsafe { libc::raise(libc::SIGINT) };

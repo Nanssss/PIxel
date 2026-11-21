@@ -3,9 +3,9 @@
 //! Each state declares its own part of the config in its module (`ClockConfig`...):
 //! this file only gathers them, and knows how to load the whole.
 
-use std::fs;
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::fs;
 use tracing::warn;
 
 use crate::EXECUTABLE_DIR;

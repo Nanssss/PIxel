@@ -8,9 +8,9 @@
 // The wrapper exposes the full C API, even the parts the app doesn't use yet.
 #![allow(dead_code)]
 
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 use super::ffi::{self, Color};
 
@@ -26,13 +26,13 @@ use super::ffi::{self, Color};
 /// keeps pointers to them, so [`RgbLedMatrix`] stores these options for its whole life.
 #[derive(Debug, Clone, Default)]
 pub struct MatrixOptions {
-    pub rows: i32,                          // library default: 32
-    pub cols: i32,                          // library default: 32
-    pub chain_length: i32,                  // library default: 1
-    pub parallel: i32,                      // library default: 1
-    pub brightness: i32,                    // library default: 100
-    pub hardware_mapping: Option<CString>,  // library default: "regular"
-    pub led_rgb_sequence: Option<CString>,  // library default: "RGB"
+    pub rows: i32,                         // library default: 32
+    pub cols: i32,                         // library default: 32
+    pub chain_length: i32,                 // library default: 1
+    pub parallel: i32,                     // library default: 1
+    pub brightness: i32,                   // library default: 100
+    pub hardware_mapping: Option<CString>, // library default: "regular"
+    pub led_rgb_sequence: Option<CString>, // library default: "RGB"
 }
 
 /// Runtime options (C `RGBLedRuntimeOptions`). See the note above about zeros.
@@ -41,13 +41,13 @@ pub struct MatrixOptions {
 /// so [`RgbLedMatrix::new`] just borrows them.
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeOptions {
-    pub gpio_slowdown: i32,                 // library default: 1 (2 on a Pi 4)
-    pub rp1_pio: i32,                       // 0 = RP1 RIO, 1 = RP1 PIO (Pi 5 only)
-    pub daemon: i32,                        // -1 disabled, 0 off (default), 1 on
-    pub drop_privileges: i32,               // -1 disabled, 0 off, 1 on (default)
-    pub do_gpio_init: bool,                 // library default: true
-    pub drop_priv_user: Option<CString>,    // library default: "daemon"
-    pub drop_priv_group: Option<CString>,   // library default: "daemon"
+    pub gpio_slowdown: i32,               // library default: 1 (2 on a Pi 4)
+    pub rp1_pio: i32,                     // 0 = RP1 RIO, 1 = RP1 PIO (Pi 5 only)
+    pub daemon: i32,                      // -1 disabled, 0 off (default), 1 on
+    pub drop_privileges: i32,             // -1 disabled, 0 off, 1 on (default)
+    pub do_gpio_init: bool,               // library default: true
+    pub drop_priv_user: Option<CString>,  // library default: "daemon"
+    pub drop_priv_group: Option<CString>, // library default: "daemon"
 }
 
 /// A handle to a drawing surface (C `LedCanvas`), owned by the C matrix.
@@ -97,7 +97,14 @@ impl Canvas {
     ///
     /// # Errors
     /// If `text` contains a NUL byte (it can't be converted to a C string).
-    pub fn draw_text(&mut self, font: &Font, x: i32, y: i32, color: Color, text: &str) -> Result<i32> {
+    pub fn draw_text(
+        &mut self,
+        font: &Font,
+        x: i32,
+        y: i32,
+        color: Color,
+        text: &str,
+    ) -> Result<i32> {
         let c_text = CString::new(text).context("invalid text for a C string")?;
         // SAFETY: both pointers are valid (see `Canvas` and `Font`), and `c_text`
         // lives until the end of the function, so during the whole call.
@@ -208,7 +215,8 @@ impl RgbLedMatrix {
         // SAFETY: both structs are valid and outlive the call. The strings they
         // point to belong to `options` (moved into `Self` below, as C++ keeps
         // these pointers) and `rt_options` (borrowed, so alive during the call).
-        let ptr = unsafe { ffi::led_matrix_create_from_options_and_rt_options(&mut opts, &mut rt_opts) };
+        let ptr =
+            unsafe { ffi::led_matrix_create_from_options_and_rt_options(&mut opts, &mut rt_opts) };
         if ptr.is_null() {
             bail!("failed to create the RGB LED matrix (not running as root?)");
         }

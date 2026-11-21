@@ -18,7 +18,8 @@ use crate::states::{AppContext, State};
 
 /// Events of the user's main calendar.
 /// Doc: <https://developers.google.com/workspace/calendar/api/v3/reference/events/list>
-const GCALENDAR_EVENTS_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const GCALENDAR_EVENTS_URL: &str =
+    "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 /// Access asked to the user: read only the calendar events.
 /// Other scopes: <https://developers.google.com/workspace/calendar/api/auth>
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
@@ -35,9 +36,7 @@ pub struct GTasksConfig {
 /// Config used when the section, or one of its fields, is missing: the tasks are shown.
 impl Default for GTasksConfig {
     fn default() -> Self {
-        GTasksConfig {
-            enabled: true,
-        }
+        GTasksConfig { enabled: true }
     }
 }
 
@@ -48,9 +47,9 @@ impl Default for GTasksConfig {
 #[derive(Debug, Deserialize)]
 struct GTask {
     #[serde(rename = "summary", default)]
-    title:          String,
-    start:          TaskStart,
-    description:    Option<String>,
+    title: String,
+    start: TaskStart,
+    description: Option<String>,
 }
 
 /// When a task starts.
@@ -78,9 +77,8 @@ enum TaskStart {
 /// and the state only reads the latest tasks it published.
 pub struct GTasksState {
     /// Latest tasks published by the background task (an empty `Vec` if there is no task)
-    tasks:  Feed<Vec<GTask>>,
+    tasks: Feed<Vec<GTask>>,
 }
-
 
 // =================================================================
 //    Methods implementation                                       |
@@ -100,8 +98,11 @@ impl GTasksState {
 
         // `inspect_err` logs the error without consuming it, `ok()` turns the `Result`
         // into an `Option`, and `?` returns `None` right away if there is no value.
-        let auth = GoogleAuth::new().await
-            .inspect_err(|e| error!("Failed to initialize Google authentication, disabling GTasks state: {e:#}"))
+        let auth = GoogleAuth::new()
+            .await
+            .inspect_err(|e| {
+                error!("Failed to initialize Google authentication, disabling GTasks state: {e:#}")
+            })
             .ok()?;
 
         // The background task must own everything it uses: cloning the client
@@ -128,12 +129,13 @@ impl State for GTasksState {
     fn draw(&self, matrix: &mut Matrix) {
         // The app only draws a state that is ready, so the `else` is a safety net
         // (the tasks may expire right between the two calls)
-        let Some(_tasks) = self.tasks.latest() else { return };
+        let Some(_tasks) = self.tasks.latest() else {
+            return;
+        };
 
         let Ok(()) = matrix.clear(Rgb888::BLUE);
     }
 }
-
 
 // =================================================================
 //    Background task                                              |
@@ -144,8 +146,8 @@ impl State for GTasksState {
 /// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
 /// lives longer than the function that started it, so it can't borrow anything.
 struct TasksFetcher {
-    client: Client,         // HTTP client shared with the other states
-    auth:   GoogleAuth,     // Google authentication, prepared once at startup
+    client: Client,   // HTTP client shared with the other states
+    auth: GoogleAuth, // Google authentication, prepared once at startup
 }
 
 impl Fetcher for TasksFetcher {
@@ -169,16 +171,17 @@ impl Fetcher for TasksFetcher {
 
         // Request parameters
         let query_params = &[
-            ("maxResults",      "5"),
-            ("orderBy",         "startTime"),
-            ("singleEvents",    "true"),
-            ("timeMin",         &Utc::now().to_rfc3339()), // get current time in RFC3339 format
+            ("maxResults", "5"),
+            ("orderBy", "startTime"),
+            ("singleEvents", "true"),
+            ("timeMin", &Utc::now().to_rfc3339()), // get current time in RFC3339 format
         ];
 
         // Send the GET request, and deserialize the JSON of the response
-        let response: TasksResponse = self.client
+        let response: TasksResponse = self
+            .client
             .get(GCALENDAR_EVENTS_URL)
-            .bearer_auth(token)     // adds the header `Authorization: Bearer <token>`
+            .bearer_auth(token) // adds the header `Authorization: Bearer <token>`
             .query(query_params)
             .send()
             .await
@@ -199,7 +202,6 @@ impl Fetcher for TasksFetcher {
     }
 }
 
-
 // =================================================================
 //    Static functions                                             |
 // =================================================================
@@ -218,7 +220,6 @@ fn log_tasks(tasks: &[GTask]) {
     }
 }
 
-
 // =================================================================
 //    Private types                                                |
 // =================================================================
@@ -232,7 +233,6 @@ struct TasksResponse {
     #[serde(default)]
     items: Vec<GTask>,
 }
-
 
 // =================================================================
 //    Tests                                                        |
@@ -264,7 +264,9 @@ mod tests {
 
     #[test]
     fn tasks_are_read_from_the_api_response() {
-        let tasks = serde_json::from_str::<TasksResponse>(RESPONSE).unwrap().items;
+        let tasks = serde_json::from_str::<TasksResponse>(RESPONSE)
+            .unwrap()
+            .items;
         assert_eq!(tasks.len(), 2);
 
         assert_eq!(tasks[0].title, "Dentist");
@@ -281,7 +283,9 @@ mod tests {
 
     #[test]
     fn response_without_items_means_no_task() {
-        let tasks = serde_json::from_str::<TasksResponse>(r#"{ "kind": "calendar#events" }"#).unwrap().items;
+        let tasks = serde_json::from_str::<TasksResponse>(r#"{ "kind": "calendar#events" }"#)
+            .unwrap()
+            .items;
         assert!(tasks.is_empty());
     }
 

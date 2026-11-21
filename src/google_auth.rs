@@ -6,7 +6,10 @@
 
 use anyhow::{Context, Result};
 use yup_oauth2::authenticator::Authenticator;
-use yup_oauth2::{DefaultHyperClientBuilder, HyperClientBuilder, InstalledFlowAuthenticator, InstalledFlowReturnMethod};
+use yup_oauth2::{
+    DefaultHyperClientBuilder, HyperClientBuilder, InstalledFlowAuthenticator,
+    InstalledFlowReturnMethod,
+};
 
 use crate::EXECUTABLE_DIR;
 
@@ -41,11 +44,12 @@ impl GoogleAuth {
 
         // *Installed flow*: on the first run, the user grants the access in a browser,
         // and Google redirects it to a local HTTP server started by the authenticator.
-        let authenticator = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
-            .persist_tokens_to_disk(EXECUTABLE_DIR.join(TOKEN_FILE))
-            .build()
-            .await
-            .context("failed to create InstalledFlowAuthenticator")?;
+        let authenticator =
+            InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
+                .persist_tokens_to_disk(EXECUTABLE_DIR.join(TOKEN_FILE))
+                .build()
+                .await
+                .context("failed to create InstalledFlowAuthenticator")?;
 
         Ok(GoogleAuth { authenticator })
     }
@@ -59,7 +63,8 @@ impl GoogleAuth {
     /// If no token could be obtained (no network, authorization refused...).
     // The token is a secret: never log it.
     pub async fn token(&self, scopes: &[&str]) -> Result<String> {
-        let token = self.authenticator
+        let token = self
+            .authenticator
             .token(scopes)
             .await
             .context("failed to obtain OAuth2 token")?;

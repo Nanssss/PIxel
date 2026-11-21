@@ -2,16 +2,16 @@
 //! one after the other.
 
 use anyhow::{Context, Result};
-use tokio::signal::unix::{signal, SignalKind};
-use tokio::time::{interval, Duration, Instant, MissedTickBehavior};
+use tokio::signal::unix::{SignalKind, signal};
+use tokio::time::{Duration, Instant, MissedTickBehavior, interval};
 use tracing::{info, warn};
 
 use crate::config::AppConfig;
 use crate::matrix::Matrix;
-use crate::states::{AppContext, State};
 use crate::states::clock::ClockState;
 use crate::states::gtasks::GTasksState;
 use crate::states::weather::WeatherState;
+use crate::states::{AppContext, State};
 
 /// Number of frames drawn per second
 const FRAME_RATE: u64 = 30;
@@ -82,10 +82,10 @@ struct App {
     /// States of the rotation, in display order. Never empty (see `build_states`).
     // A `Vec` can only hold values of a single type: `Box<dyn State>` is that type,
     // a pointer to "some state", whatever its concrete type is.
-    states:     Vec<Box<dyn State>>,
+    states: Vec<Box<dyn State>>,
     /// Index in `states` of the state currently on screen
-    current:    usize,
-    matrix:     Matrix,
+    current: usize,
+    matrix: Matrix,
 }
 
 impl App {

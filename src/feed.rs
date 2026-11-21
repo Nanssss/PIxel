@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use tokio::sync::watch;
-use tokio::time::{sleep, timeout, Duration, Instant};
+use tokio::time::{Duration, Instant, sleep, timeout};
 use tracing::warn;
 
 /// Wait before fetching again after a first failed fetch (e.g. no network at boot).
@@ -115,7 +115,10 @@ impl<T> Feed<T> {
         // The task takes ownership of the fetcher and of the sending side of the channel.
         tokio::spawn(fetch_loop(fetcher, tx));
 
-        Feed { rx, max_age: F::MAX_AGE }
+        Feed {
+            rx,
+            max_age: F::MAX_AGE,
+        }
     }
 
     /// Returns the latest published value, or `None` if there is nothing to display
@@ -128,8 +131,8 @@ impl<T> Feed<T> {
     // caller can keep the value as long as it wants without blocking the task.
     pub fn latest(&self) -> Option<Arc<T>> {
         self.rx
-            .borrow()           // reads the latest value without waiting
-            .as_ref()           // `&Option<Fetched<T>>` -> `Option<&Fetched<T>>`
+            .borrow() // reads the latest value without waiting
+            .as_ref() // `&Option<Fetched<T>>` -> `Option<&Fetched<T>>`
             .filter(|fetched| fetched.fetched_at.elapsed() <= self.max_age)
             .map(|fetched| Arc::clone(&fetched.data))
     }

@@ -55,12 +55,14 @@ impl AppContext {
     pub fn new() -> Result<Self> {
         let client = Client::builder()
             // Sent with every request, to tell the APIs who is calling (e.g. "pixel/0.1.0").
-            .user_agent(concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "/",
+                env!("CARGO_PKG_VERSION")
+            ))
             .build()
             .context("failed to build the HTTP client")?;
 
-        Ok(AppContext {
-            client,
-        })
+        Ok(AppContext { client })
     }
 }

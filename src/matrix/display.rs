@@ -53,7 +53,10 @@ impl Matrix {
         // `Matrix`, so it can't be used after the matrix is dropped.
         let offscreen = unsafe { rgb_matrix.create_offscreen_canvas() };
 
-        Ok(Self { offscreen, rgb_matrix })
+        Ok(Self {
+            offscreen,
+            rgb_matrix,
+        })
     }
 
     /// Displays everything drawn on the matrix since the last call, on the next vertical sync.
@@ -112,8 +115,8 @@ impl DrawTarget for Matrix {
 /// If the executable file can't be read.
 fn runtime_options() -> Result<RuntimeOptions> {
     let exe = std::env::current_exe().context("failed to get the executable path")?;
-    let metadata = std::fs::metadata(&exe)
-        .with_context(|| format!("failed to read the owner of {exe:?}"))?;
+    let metadata =
+        std::fs::metadata(&exe).with_context(|| format!("failed to read the owner of {exe:?}"))?;
 
     // `MetadataExt` (Unix only) gives the numeric user and group ids of the file
     let (uid, gid) = (metadata.uid(), metadata.gid());
@@ -123,7 +126,7 @@ fn runtime_options() -> Result<RuntimeOptions> {
     if uid == 0 || gid == 0 {
         warn!("The executable belongs to root: privileges are kept, the app runs as root");
         return Ok(RuntimeOptions {
-            drop_privileges: -1,    // -1: disabled (0 would mean "library default": on)
+            drop_privileges: -1, // -1: disabled (0 would mean "library default": on)
             ..Default::default()
         });
     }
@@ -133,7 +136,7 @@ fn runtime_options() -> Result<RuntimeOptions> {
     // The C library accepts a user (group) name or its numeric id. A number never
     // contains a NUL byte, so `CString::new` can't fail here.
     Ok(RuntimeOptions {
-        drop_priv_user:  Some(CString::new(uid.to_string())?),
+        drop_priv_user: Some(CString::new(uid.to_string())?),
         drop_priv_group: Some(CString::new(gid.to_string())?),
         ..Default::default()
     })
