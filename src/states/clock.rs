@@ -45,10 +45,17 @@ impl Default for ClockConfig {
 
 /// Shows the current time, centered in a red border.
 ///
-/// Unlike the other states, the clock stores no data: the time is not fetched
-/// in the background, it is read from the system clock on every frame (see `draw`).
-// A *unit struct*: a type without any field, only there to carry the `State` implementation.
-pub struct ClockState;
+/// Unlike the other states, the time is not fetched in the background: it is read
+/// from the system clock on every frame (see `draw`).
+// `Default`: an empty text, formatted on the first frame (`shown_at` 0 is never "now").
+#[derive(Default)]
+pub struct ClockState {
+    /// Time on screen (`HH:MM:SS`), kept between frames: only reformatted when the
+    /// second changes, instead of a new `String` 30 times per second
+    text: String,
+    /// Unix timestamp (in seconds) `text` was formatted for
+    shown_at: i64,
+}
 
 // =================================================================
 //    Methods implementation                                       |
@@ -57,8 +64,8 @@ pub struct ClockState;
 impl ClockState {
     /// Creates the clock, or returns `None` if it is turned off in the config.
     pub fn new(config: ClockConfig) -> Option<Self> {
-        // `then_some(value)` turns a `bool` into an `Option`: `Some(value)` if true, else `None`
-        config.enabled.then_some(ClockState)
+        // `then(f)` turns a `bool` into an `Option`: `Some(f())` if true, else `None`.
+        config.enabled.then(ClockState::default)
     }
 }
 
@@ -72,7 +79,14 @@ impl State for ClockState {
     fn draw(&mut self, matrix: &mut Matrix) {
         // The time of day is an input of the frame (like the elapsed time of an
         // animation), not fetched data: reading the system clock is local and cheap.
-        let time = Local::now().format("%H:%M:%S").to_string();
+        let now = Local::now();
+
+        // Whole timestamp rather than `second()`: stays right if the clock jumps
+        // (e.g. the NTP sync after boot)
+        if now.timestamp() != self.shown_at {
+            self.text = now.format("%H:%M:%S").to_string();
+            self.shown_at = now.timestamp();
+        }
 
         let screen = matrix.bounding_box();
 
@@ -80,6 +94,7 @@ impl State for ClockState {
         let Ok(()) = screen.into_styled(BORDER_STYLE).draw(matrix);
 
         // Time centered on the panel
-        let Ok(_) = Text::with_text_style(&time, screen.center(), TIME_FONT, CENTERED).draw(matrix);
+        let Ok(_) =
+            Text::with_text_style(&self.text, screen.center(), TIME_FONT, CENTERED).draw(matrix);
     }
 }

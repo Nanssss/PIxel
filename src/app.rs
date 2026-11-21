@@ -17,10 +17,10 @@ use crate::states::{AppContext, State};
 const FRAME_RATE: u64 = 30;
 
 /// Time between two frames
-const FRAME_PERIOD: Duration = Duration::from_millis(1000 / FRAME_RATE);
+const FRAME_PERIOD: Duration = Duration::from_nanos(1_000_000_000 / FRAME_RATE);
 
 /// How long each state stays on screen
-const DISPLAY_TIME: Duration = Duration::from_millis(2000);
+const DISPLAY_TIME: Duration = Duration::from_secs(2);
 
 // =================================================================
 //    Frame loop                                                   |
@@ -183,7 +183,7 @@ async fn build_states(config: AppConfig, context: &AppContext) -> Vec<Box<dyn St
     // No state is enabled: fall back to the clock, whatever the config says
     if states.is_empty() {
         warn!("No state is enabled! Falling back to Clock.");
-        states.push(Box::new(ClockState));
+        states.push(Box::new(ClockState::default()));
     }
 
     states
