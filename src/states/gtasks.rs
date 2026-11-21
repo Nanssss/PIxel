@@ -25,25 +25,20 @@ const GCALENDAR_EVENTS_URL: &str =
 const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
 /// Config of the Google tasks: the `[gtasks]` section of `config.toml`.
-// `#[serde(default)]`: a field missing from the config file takes its value from
-// the `Default` implementation below, instead of making the whole file invalid.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct GTasksConfig {
     enabled: bool,
 }
 
-/// Config used when the section, or one of its fields, is missing: the tasks are shown.
+/// Values used when the section, or one of its fields, is missing: the tasks are shown.
 impl Default for GTasksConfig {
     fn default() -> Self {
         GTasksConfig { enabled: true }
     }
 }
 
-/// One task to show: an event of the calendar.
-///
-/// Read as is from the JSON of the API: each field is taken from the event field
-/// of the same name, unless `rename` gives another one.
+/// One task to show: an event of the calendar, read as is from the JSON of the API.
 #[derive(Debug, Deserialize)]
 struct GTask {
     #[serde(rename = "summary", default)]
@@ -56,8 +51,6 @@ struct GTask {
 ///
 /// The API gives it in one of two shapes: `{ "dateTime": "2026-11-15T18:30:00+01:00" }`,
 /// or `{ "date": "2026-11-15" }` for a task lasting the whole day.
-// `untagged`: serde tries each variant in turn, and keeps the first one whose
-// fields are all found in the JSON. Other fields (e.g. "timeZone") are ignored.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 #[serde(untagged)]
 enum TaskStart {
@@ -71,10 +64,7 @@ enum TaskStart {
     },
 }
 
-/// Shows the next tasks of the user's calendar.
-///
-/// The state never fetches anything itself: a background task (see `Feed::spawn`) does,
-/// and the state only reads the latest tasks it published.
+/// Shows the next tasks of the user's calendar, fetched by a background task (see `Feed`).
 pub struct GTasksState {
     /// Latest tasks published by the background task (an empty `Vec` if there is no task)
     tasks: Feed<Vec<GTask>>,
@@ -91,13 +81,10 @@ impl GTasksState {
     /// Only the OAuth2 authenticator is prepared here (it reads local files). Nothing
     /// is fetched: the state isn't ready until the first tasks arrive.
     pub async fn new(config: GTasksConfig, context: &AppContext) -> Option<Self> {
-        // A state turned off in the config is never built: its task is never started
         if !config.enabled {
             return None;
         }
 
-        // `inspect_err` logs the error without consuming it, `ok()` turns the `Result`
-        // into an `Option`, and `?` returns `None` right away if there is no value.
         let auth = GoogleAuth::new()
             .await
             .inspect_err(|e| {
@@ -105,14 +92,11 @@ impl GTasksState {
             })
             .ok()?;
 
-        // The background task must own everything it uses: cloning the client
-        // only copies a handle, the connections stay shared (see `AppContext`).
         let fetcher = TasksFetcher {
             client: context.client.clone(),
             auth,
         };
 
-        // Start the background task: returns immediately
         Some(GTasksState {
             tasks: Feed::spawn(fetcher),
         })
@@ -142,8 +126,7 @@ impl State for GTasksState {
 
 /// Fetches the tasks for the background task of the state.
 ///
-/// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
-/// lives longer than the function that started it, so it can't borrow anything.
+/// Owns everything a fetch needs: the task outlives the function that starts it.
 struct TasksFetcher {
     client: Client,   // HTTP client shared with the other states
     auth: GoogleAuth, // Google authentication, prepared once at startup
@@ -165,28 +148,26 @@ impl Fetcher for TasksFetcher {
 
     /// Fetches the next tasks from the GCalendar API
     async fn fetch(&mut self) -> Result<Vec<GTask>> {
-        // Get the access token (from the cache, unless a new one is needed)
+        // From the cache, unless a new one is needed
         let token = self.auth.token(GCALENDAR_SCOPES).await?;
 
-        // Request parameters
         let query_params = &[
             ("maxResults", "5"),
             ("orderBy", "startTime"),
             ("singleEvents", "true"),
-            ("timeMin", &Utc::now().to_rfc3339()), // get current time in RFC3339 format
+            ("timeMin", &Utc::now().to_rfc3339()), // tasks not over yet
         ];
 
-        // Send the GET request, and deserialize the JSON of the response
         let response: TasksResponse = self
             .client
             .get(GCALENDAR_EVENTS_URL)
-            .bearer_auth(token) // adds the header `Authorization: Bearer <token>`
+            .bearer_auth(token)
             .query(query_params)
             .send()
             .await
             .context("failed to send GTASKS API request")?
-            // Without this, an error (e.g. "401 Unauthorized") would be read as if it
-            // was a list of events: it has no "items", so it would look like "no task".
+            // Without this, an error (e.g. "401 Unauthorized") has no "items": it would
+            // look like "no task"
             .error_for_status()
             .context("GTASKS API returned an error")?
             .json()
@@ -207,7 +188,6 @@ impl Fetcher for TasksFetcher {
 
 /// Logs how many tasks were fetched, and each of them at the `debug` level.
 fn log_tasks(tasks: &[GTask]) {
-    // No "[GOOGLE TASKS]" prefix needed: the log line already shows the module
     info!("Found {} tasks", tasks.len());
 
     for task in tasks {
@@ -223,12 +203,10 @@ fn log_tasks(tasks: &[GTask]) {
 //    Private types                                                |
 // =================================================================
 
-/// Response of the GCalendar API.
-// Only the field we use is declared: serde ignores the other ones of the JSON.
+/// Response of the GCalendar API (only the field used: the others are ignored).
 #[derive(Debug, Deserialize)]
 struct TasksResponse {
-    /// The events, already sorted by start time. `default`: an empty list if the
-    /// field is missing.
+    /// The events, already sorted by start time (empty if the field is missing)
     #[serde(default)]
     items: Vec<GTask>,
 }
@@ -237,10 +215,8 @@ struct TasksResponse {
 //    Tests                                                        |
 // =================================================================
 
-// `#[cfg(test)]`: this module is only compiled by `cargo test`, never in the app.
 #[cfg(test)]
 mod tests {
-    // Gives access to everything of the parent module, private items included
     use super::*;
 
     /// A response of the GCalendar API (shortened): a task at a given time, then an
@@ -270,7 +246,7 @@ mod tests {
 
         assert_eq!(tasks[0].title, "Dentist");
         assert_eq!(tasks[0].description.as_deref(), Some("Bring the X-ray"));
-        // Compared as an instant: the test doesn't depend on the time zone of the machine
+        // Compared as an instant: doesn't depend on the time zone of the machine
         let expected = DateTime::parse_from_rfc3339("2026-11-16T17:30:00Z").unwrap();
         assert!(matches!(tasks[0].start, TaskStart::At { time } if time == expected));
 

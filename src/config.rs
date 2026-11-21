@@ -17,9 +17,7 @@ use crate::states::weather::WeatherConfig;
 const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 /// The whole config: one section per state (`[clock]`, `[weather]`...).
-// `Default` can be derived because every field type implements `Default`.
-// `#[serde(default)]`: a section missing from the file takes its default config,
-// instead of making the whole file invalid.
+/// A section missing from the file takes its default values.
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
@@ -32,21 +30,18 @@ impl AppConfig {
     /// Loads the config from the config.toml file, or falls back to the default
     /// config (and logs why) if it can't be loaded.
     pub fn load_or_default() -> Self {
-        // `{e:#}` prints the whole anyhow context chain on one line
         Self::load()
             .inspect_err(|e| warn!("No config loaded, using defaults: {e:#}"))
             .unwrap_or_default()
     }
 
-    /// Reads and parses the config.toml file: only propagates errors,
-    /// `load_or_default` decides what to do with them.
+    /// Reads and parses the config.toml file.
     ///
     /// # Errors
     /// If the file can't be read, or isn't a valid config.
     fn load() -> Result<Self> {
         let config_file_path = EXECUTABLE_DIR.join(CONFIG_FILE_PATH);
 
-        // `with_context` takes a closure: the message is only built if there is an error
         let content = fs::read_to_string(&config_file_path)
             .with_context(|| format!("failed to read {}", config_file_path.display()))?;
 

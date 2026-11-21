@@ -21,7 +21,7 @@ use crate::paths::EXECUTABLE_DIR;
 /// The LED matrix as the app sees it: draw on it, then [`Matrix::show`] the frame.
 pub struct Matrix {
     /// Hidden buffer we draw on before displaying it (double buffering).
-    /// Fields drop in declaration order: the canvas goes before the matrix that owns it.
+    /// Declared first: fields drop in order, so the canvas goes before its matrix.
     offscreen: Canvas,
     rgb_matrix: RgbLedMatrix,
 }
@@ -33,14 +33,12 @@ impl Matrix {
     /// # Errors
     /// If the C library fails to create the matrix (usually: not run as root).
     pub fn new() -> Result<Self> {
-        // This project's panel. Fields not listed keep the library defaults
-        // (`..Default::default()` fills the rest with zeros = library defaults).
+        // This project's panel. Fields not listed keep the library defaults.
         let options = MatrixOptions {
-            // The C library takes `int`s: `as` can't truncate these small constants
+            // Small constants: `as` can't truncate them
             rows: PANEL_HEIGHT as i32,
             cols: PANEL_WIDTH as i32,
             brightness: 100,
-            // `c"..."` is a C-string literal (`&'static CStr`), `to_owned` makes a `CString`
             hardware_mapping: Some(c"adafruit-hat".to_owned()),
             ..Default::default()
         };
@@ -62,9 +60,8 @@ impl Matrix {
 
     /// Displays everything drawn on the matrix since the last call, on the next vertical sync.
     ///
-    /// Drawing goes to a hidden buffer (double buffering, no flickering). The swap gives
-    /// back the previously displayed buffer, which is cleared and becomes the next hidden
-    /// one, so each frame starts from a black screen. Only two buffers ever exist:
+    /// The swap gives back the previously displayed buffer, which is cleared and becomes
+    /// the next hidden one: each frame starts from a black screen.
     ///
     /// ```text
     ///          frame 1          frame 2          frame 3
@@ -77,8 +74,7 @@ impl Matrix {
     }
 }
 
-/// The matrix is drawn on like a canvas: everything goes to its hidden buffer,
-/// and nothing is visible until `Matrix::show` is called.
+/// Drawing goes to the hidden buffer: nothing is visible until `Matrix::show`.
 impl OriginDimensions for Matrix {
     fn size(&self) -> Size {
         OriginDimensions::size(&self.offscreen)
@@ -98,8 +94,7 @@ impl DrawTarget for Matrix {
 
     /// Fills the whole panel with one color, using the fast C library call.
     fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
-        // Can't directly use .clear() because it's already a canvas function
-        // In this case we want to map it to led_canvas_fill
+        // Not `self.offscreen.clear()`: that is `Canvas::clear`, which only clears to black
         DrawTarget::clear(&mut self.offscreen, color)
     }
 }
@@ -107,10 +102,9 @@ impl DrawTarget for Matrix {
 /// Runtime options of the matrix: which user the app runs as once started.
 ///
 /// The app is started as root, which the matrix needs to access the GPIO. Right
-/// after creating it, the C library drops root privileges and switches to another
-/// user: by default `daemon`, which can't write the files of the app.
-/// We switch instead to the owner of the app directory, i.e. the user who deployed
-/// the app, and who also owns its files (config, tokens, logs).
+/// after creating it, the C library drops root privileges for the `daemon` user by
+/// default, which can't write the files of the app. We switch instead to the owner
+/// of the app directory: the user who deployed it, and owns its files (config, logs...).
 ///
 /// # Errors
 /// If the app directory can't be read.
@@ -119,7 +113,6 @@ fn runtime_options() -> Result<RuntimeOptions> {
         .metadata()
         .with_context(|| format!("failed to read the owner of {}", EXECUTABLE_DIR.display()))?;
 
-    // `MetadataExt` (Unix only) gives the numeric user and group ids of the directory
     let (uid, gid) = (metadata.uid(), metadata.gid());
 
     // The C library reads "0" as a name, not as root's id: the lookup would fail and
@@ -134,8 +127,8 @@ fn runtime_options() -> Result<RuntimeOptions> {
 
     info!("Root privileges will be dropped to uid {uid}, gid {gid} (owner of the app directory)");
 
-    // The C library accepts a user (group) name or its numeric id. A number never
-    // contains a NUL byte, so `CString::new` can't fail here.
+    // The C library takes a name or a numeric id. A number has no NUL byte:
+    // `CString::new` can't fail here.
     Ok(RuntimeOptions {
         drop_priv_user: Some(CString::new(uid.to_string())?),
         drop_priv_group: Some(CString::new(gid.to_string())?),

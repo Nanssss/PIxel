@@ -21,8 +21,8 @@ const CREDENTIALS_FILE: &str = "in/credentials.json";
 const TOKEN_FILE: &str = "in/tokencache.json";
 
 /// Gives out the access tokens needed to call the Google APIs.
-// The field is private: the rest of the app doesn't depend on `yup-oauth2`, and
-// only sees `new` and `token`.
+///
+/// Hides `yup-oauth2`: the rest of the app only sees `new` and `token`.
 pub struct GoogleAuth {
     authenticator: Authenticator<Connector>,
 }
@@ -47,8 +47,8 @@ impl GoogleAuth {
                 )
             })?;
 
-        // *Installed flow*: on the first run, the user grants the access in a browser,
-        // and Google redirects it to a local HTTP server started by the authenticator.
+        // Installed flow: on the first run, the user grants the access in a browser,
+        // and Google redirects it to a local HTTP server started by the authenticator
         let authenticator =
             InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
                 .persist_tokens_to_disk(EXECUTABLE_DIR.join(TOKEN_FILE))
@@ -61,12 +61,12 @@ impl GoogleAuth {
 
     /// Returns an access token valid for `scopes`, to be sent as a `Bearer` token.
     ///
-    /// The token comes from the cache when it is still valid, so this only goes
-    /// through the network when a new one is needed.
+    /// Taken from the cache while it is still valid: only goes through the network
+    /// when a new one is needed.
     ///
     /// # Errors
     /// If no token could be obtained (no network, authorization refused...).
-    // The token is a secret: never log it.
+    // The token is a secret: never log it
     pub async fn token(&self, scopes: &[&str]) -> Result<String> {
         let token = self
             .authenticator
@@ -74,7 +74,6 @@ impl GoogleAuth {
             .await
             .context("failed to obtain OAuth2 token")?;
 
-        // `.context()` also works on an `Option`: `None` becomes an error with this message
         Ok(token.token().context("OAuth2 token is empty")?.to_string())
     }
 }

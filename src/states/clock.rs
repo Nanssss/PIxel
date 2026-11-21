@@ -28,15 +28,13 @@ const CENTERED: TextStyle = TextStyleBuilder::new()
     .build();
 
 /// Config of the clock: the `[clock]` section of `config.toml`.
-// `#[serde(default)]`: a field missing from the config file takes its value from
-// the `Default` implementation below, instead of making the whole file invalid.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct ClockConfig {
     enabled: bool,
 }
 
-/// Config used when the section, or one of its fields, is missing: the clock is shown.
+/// Values used when the section, or one of its fields, is missing: the clock is shown.
 impl Default for ClockConfig {
     fn default() -> Self {
         ClockConfig { enabled: true }
@@ -45,13 +43,12 @@ impl Default for ClockConfig {
 
 /// Shows the current time, centered in a red border.
 ///
-/// Unlike the other states, the time is not fetched in the background: it is read
-/// from the system clock on every frame (see `draw`).
-// `Default`: an empty text, formatted on the first frame (`shown_at` 0 is never "now").
+/// Unlike the other states, nothing is fetched in the background: the time is read
+/// from the system clock on every frame.
+// `Default`: an empty text, formatted on the first frame (`shown_at` 0 is never "now")
 #[derive(Default)]
 pub struct ClockState {
-    /// Time on screen (`HH:MM:SS`), kept between frames: only reformatted when the
-    /// second changes, instead of a new `String` 30 times per second
+    /// Time on screen (`HH:MM:SS`), only formatted again when the second changes
     text: String,
     /// Unix timestamp (in seconds) `text` was formatted for
     shown_at: i64,
@@ -64,7 +61,6 @@ pub struct ClockState {
 impl ClockState {
     /// Creates the clock, or returns `None` if it is turned off in the config.
     pub fn new(config: ClockConfig) -> Option<Self> {
-        // `then(f)` turns a `bool` into an `Option`: `Some(f())` if true, else `None`.
         config.enabled.then(ClockState::default)
     }
 }
@@ -77,12 +73,10 @@ impl State for ClockState {
 
     /// Draws the border, then the time (`HH:MM:SS`) in the middle of the panel.
     fn draw(&mut self, matrix: &mut Matrix) {
-        // The time of day is an input of the frame (like the elapsed time of an
-        // animation), not fetched data: reading the system clock is local and cheap.
+        // Reading the system clock is local and cheap: fine on every frame
         let now = Local::now();
 
-        // Whole timestamp rather than `second()`: stays right if the clock jumps
-        // (e.g. the NTP sync after boot)
+        // Whole timestamp rather than `second()`: stays right if the clock jumps (NTP sync)
         if now.timestamp() != self.shown_at {
             self.text = now.format("%H:%M:%S").to_string();
             self.shown_at = now.timestamp();
@@ -90,10 +84,8 @@ impl State for ClockState {
 
         let screen = matrix.bounding_box();
 
-        // 1px red border around the whole panel
         let Ok(()) = screen.into_styled(BORDER_STYLE).draw(matrix);
 
-        // Time centered on the panel
         let Ok(_) =
             Text::with_text_style(&self.text, screen.center(), TIME_FONT, CENTERED).draw(matrix);
     }

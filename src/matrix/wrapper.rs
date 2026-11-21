@@ -2,10 +2,10 @@
 //!
 //! All FFI calls of the project live here. C items are always written with
 //! their `ffi::` prefix: every crossing into C is visible at a glance.
-//! The only `unsafe` code outside of this file is calling the `unsafe fn`s below,
-//! whose `# Safety` section states what the caller must guarantee.
+//! Elsewhere, `unsafe` code only calls the `unsafe fn`s below (whose `# Safety`
+//! section states what the caller must guarantee), or `libc::raise` in the simulator.
 
-// The wrapper exposes the full C API, even the parts the app doesn't use yet.
+// The wrapper exposes the full C API, even the parts the app doesn't use yet
 #![allow(dead_code)]
 
 use std::ffi::{CStr, CString, c_char};
@@ -23,8 +23,8 @@ use super::ffi::{self, Color};
 
 /// Matrix options (C `RGBLedMatrixOptions`, subset). See the note above about zeros.
 ///
-/// Strings are `CString` (NUL-terminated, like C's `const char*`): the C++ matrix
-/// keeps pointers to them, so [`RgbLedMatrix`] stores these options for its whole life.
+/// The C++ matrix keeps pointers to the strings, so [`RgbLedMatrix`] stores these
+/// options for its whole life.
 #[derive(Debug, Clone, Default)]
 pub struct MatrixOptions {
     pub rows: i32,                         // library default: 32
@@ -140,13 +140,12 @@ impl Font {
     /// # Errors
     /// If `path` contains a NUL byte, or if the C library can't load the font.
     pub fn load(path: &Path) -> Result<Self> {
-        // A path isn't always valid UTF-8: its raw bytes are what C expects
+        // Raw bytes: a path isn't always valid UTF-8
         let c_path =
             CString::new(path.as_os_str().as_encoded_bytes()).context("invalid font path")?;
         // SAFETY: `c_path` is a valid C string, alive during the whole call.
         let ptr = unsafe { ffi::load_font(c_path.as_ptr()) };
         if ptr.is_null() {
-            // `bail!(...)` is anyhow's shortcut for `return Err(anyhow!(...))`
             bail!("failed to load font from {}", path.display());
         }
         Ok(Self { ptr })
@@ -174,11 +173,9 @@ pub struct RgbLedMatrix {
     options: MatrixOptions,
 }
 
-// SAFETY: `Send` only allows *moving* the matrix to another thread (e.g. when a
-// tokio task migrates), never using it from two threads at once: that would need
-// `Sync`, which we don't implement. The C++ matrix isn't tied to the thread that
-// created it (its refresh thread is internal), so moving the handle is fine.
-// Raw pointers are `!Send` by default, hence this explicit (unsafe) promise.
+// SAFETY: `Send` only allows *moving* the matrix to another thread, never using it
+// from two threads at once (that would need `Sync`, not implemented). The C++ matrix
+// isn't tied to the thread that created it (its refresh thread is internal).
 unsafe impl Send for RgbLedMatrix {}
 
 impl RgbLedMatrix {
@@ -196,8 +193,6 @@ impl RgbLedMatrix {
         // SAFETY: same as above.
         let mut rt_opts: ffi::RGBLedRuntimeOptions = unsafe { std::mem::zeroed() };
 
-        // Populate standard options. `as_deref` turns a `&Option<CString>` into the
-        // `Option<&CStr>` that `opt_c_ptr` takes.
         opts.rows = options.rows;
         opts.cols = options.cols;
         opts.chain_length = options.chain_length;
@@ -206,7 +201,6 @@ impl RgbLedMatrix {
         opts.hardware_mapping = opt_c_ptr(options.hardware_mapping.as_deref());
         opts.led_rgb_sequence = opt_c_ptr(options.led_rgb_sequence.as_deref());
 
-        // Populate runtime options
         rt_opts.gpio_slowdown = rt_options.gpio_slowdown;
         rt_opts.rp1_pio = rt_options.rp1_pio;
         rt_opts.daemon = rt_options.daemon;
@@ -224,8 +218,7 @@ impl RgbLedMatrix {
             bail!("failed to create the RGB LED matrix (not running as root?)");
         }
 
-        // Moving `options` only moves the `CString` handles, not their heap
-        // buffers: the pointers given to C++ above stay valid.
+        // Moving `options` doesn't move the strings' heap buffers: the pointers stay valid
         Ok(Self { ptr, options })
     }
 
@@ -236,11 +229,9 @@ impl RgbLedMatrix {
     ///
     /// # Safety
     /// The returned canvas must not be used after `self` is dropped: the C library
-    /// frees it in `led_matrix_delete`. This can't be expressed with a lifetime here
-    /// (the owner would have to store a reference to its own field), so the caller
-    /// guarantees it.
+    /// frees it in `led_matrix_delete`. A lifetime can't express this here (the owner
+    /// would have to store a reference to its own field), so the caller guarantees it.
     pub unsafe fn create_offscreen_canvas(&mut self) -> Canvas {
-        // In edition 2024, the body of an `unsafe fn` still needs `unsafe` blocks.
         // SAFETY: `ptr` is valid (see `RgbLedMatrix`).
         let ptr = unsafe { ffi::led_matrix_create_offscreen_canvas(self.ptr) };
         Canvas { ptr }
@@ -270,8 +261,8 @@ impl RgbLedMatrix {
     }
 }
 
-/// Automatically cleans up matrix memory and stops hardware threads safely on exit.
-/// Rust runs this before dropping the fields, so `options` outlives the C++ matrix.
+/// Frees the C++ matrix and stops its refresh thread (the panel turns off).
+/// Runs before the fields are dropped: `options` outlives the C++ matrix.
 impl Drop for RgbLedMatrix {
     fn drop(&mut self) {
         // SAFETY: `ptr` is valid (see `RgbLedMatrix`), and freed only once, here.
@@ -280,8 +271,6 @@ impl Drop for RgbLedMatrix {
 }
 
 /// Pointer to the string, or null for `None` (= "library default" for the C API).
-// `Option<&CStr>` rather than `&Option<CString>`: the idiomatic way to take an
-// optional borrowed value, which doesn't force the caller to own an `Option`.
 fn opt_c_ptr(s: Option<&CStr>) -> *const c_char {
     s.map_or(std::ptr::null(), CStr::as_ptr)
 }

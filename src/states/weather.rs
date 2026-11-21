@@ -21,8 +21,6 @@ const DAILY_VARIABLES: &str =
     "weather_code,apparent_temperature_max,apparent_temperature_min,precipitation_sum";
 
 /// Config of the weather: the `[weather]` section of `config.toml`.
-// `#[serde(default)]`: a field missing from the config file takes its value from
-// the `Default` implementation below, instead of making the whole file invalid.
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct WeatherConfig {
@@ -33,7 +31,8 @@ pub struct WeatherConfig {
     longitude: f64,
 }
 
-/// Config used when the section, or one of its fields, is missing: the weather at the coordinates below.
+/// Values used when the section, or one of its fields, is missing: the weather at
+/// the coordinates below.
 impl Default for WeatherConfig {
     fn default() -> Self {
         WeatherConfig {
@@ -55,8 +54,8 @@ struct Forecast {
 
 /// Weather of the day, grouped by the icon that shows it.
 ///
-/// The weather API describes it with a *WMO code*, which is far more detailed (light,
-/// moderate or heavy rain, freezing rain, rain showers...): see `Condition::from_wmo`.
+/// The weather API gives a far more detailed *WMO code* (light, moderate or heavy
+/// rain, freezing rain, showers...): see `Condition::from_wmo`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Condition {
     Clear,
@@ -75,7 +74,7 @@ impl Condition {
     /// Returns the condition matching a WMO weather code.
     ///
     /// Codes used by the weather API: <https://open-meteo.com/en/docs#weathervariables>
-    // `rustfmt::skip`: the match reads as a lookup table, keep its columns aligned
+    // Keeps the table aligned
     #[rustfmt::skip]
     fn from_wmo(code: u8) -> Self {
         match code {
@@ -92,10 +91,7 @@ impl Condition {
     }
 }
 
-/// Shows the forecast of the day.
-///
-/// The state never fetches anything itself: a background task (see `Feed::spawn`) does,
-/// and the state only reads the latest forecast it published.
+/// Shows the forecast of the day, fetched by a background task (see `Feed`).
 pub struct WeatherState {
     forecast: Feed<Forecast>, // latest forecast published by the background task
 }
@@ -110,20 +106,16 @@ impl WeatherState {
     /// Returns `None` if the state is turned off in the config.
     /// Nothing is fetched here: the state isn't ready until the first forecast arrives.
     pub fn new(config: WeatherConfig, context: &AppContext) -> Option<Self> {
-        // A state turned off in the config is never built: its task is never started
         if !config.enabled {
             return None;
         }
 
-        // The background task must own everything it uses: cloning the client
-        // only copies a handle, the connections stay shared (see `AppContext`).
         let fetcher = ForecastFetcher {
             client: context.client.clone(),
             latitude: config.latitude,
             longitude: config.longitude,
         };
 
-        // Start the background task: returns immediately
         Some(WeatherState {
             forecast: Feed::spawn(fetcher),
         })
@@ -153,8 +145,7 @@ impl State for WeatherState {
 
 /// Fetches the forecast for the background task of the state.
 ///
-/// Owns everything a fetch needs: the task that runs it (see `Feed::spawn`)
-/// lives longer than the function that started it, so it can't borrow anything.
+/// Owns everything a fetch needs: the task outlives the function that starts it.
 struct ForecastFetcher {
     client: Client, // HTTP client shared with the other states
     latitude: f64,  // place the forecast is fetched for (see `WeatherConfig`)
@@ -174,7 +165,6 @@ impl Fetcher for ForecastFetcher {
 
     /// Fetches the forecast of the day from the weather API
     async fn fetch(&mut self) -> Result<Forecast> {
-        // Request parameters
         let latitude = self.latitude.to_string();
         let longitude = self.longitude.to_string();
         let query_params = &[
@@ -185,7 +175,6 @@ impl Fetcher for ForecastFetcher {
             ("forecast_days", "1"), // today only
         ];
 
-        // Send the GET request, and deserialize the JSON of the response
         let response: WeatherResponse = self
             .client
             .get(WEATHER_API_URL)
@@ -193,7 +182,7 @@ impl Fetcher for ForecastFetcher {
             .send()
             .await
             .context("failed to send weather API request")?
-            // Without this, a "400 Bad Request" would be read as if it was a forecast
+            // Without this, a "400 Bad Request" would be parsed as if it was a forecast
             .error_for_status()
             .context("weather API returned an error")?
             .json()
@@ -203,7 +192,6 @@ impl Fetcher for ForecastFetcher {
 
         let forecast = Forecast::from(response.daily);
 
-        // No "[WEATHER]" prefix needed: the log line already shows the module
         info!(
             "Forecast: {:?}, {}°C max, {}°C min, {} mm of precipitation",
             forecast.condition, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum
@@ -217,15 +205,14 @@ impl Fetcher for ForecastFetcher {
 //    Private types                                                |
 // =================================================================
 
-/// Response of the weather API.
-// Only the fields we use are declared: serde ignores the other ones of the JSON.
+/// Response of the weather API (only the fields used: the others are ignored).
 #[derive(Debug, Deserialize)]
 struct WeatherResponse {
     daily: DailyData,
 }
 
-/// Daily values of the response. The API returns a list for each of them, with one
-/// element per forecast day: we ask for a single day, so one element.
+/// Daily values of the response: a list for each, with one element per forecast day.
+/// We ask for a single day: `[_; 1]` makes serde refuse any other length.
 #[derive(Debug, Deserialize)]
 struct DailyData {
     weather_code: [u8; 1],              // WMO code, see `Condition::from_wmo`
@@ -235,8 +222,6 @@ struct DailyData {
 }
 
 /// Turns what the API sent into what the state displays.
-///
-/// Implementing `From` gives us `Into` for free.
 impl From<DailyData> for Forecast {
     fn from(daily: DailyData) -> Self {
         Forecast {
@@ -252,10 +237,8 @@ impl From<DailyData> for Forecast {
 //    Tests                                                        |
 // =================================================================
 
-// `#[cfg(test)]`: this module is only compiled by `cargo test`, never in the app.
 #[cfg(test)]
 mod tests {
-    // Gives access to everything of the parent module, private items included
     use super::*;
 
     /// A real response of the weather API (shortened)

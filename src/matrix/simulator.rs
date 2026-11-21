@@ -31,8 +31,8 @@ pub struct Matrix {
 impl Matrix {
     /// Creates the simulated panel.
     ///
-    /// Never fails: it returns a `Result` only to have the same signature as the real
-    /// `Matrix::new`, so that the app builds with either.
+    /// Never fails: returns a `Result` only to have the same signature as the real
+    /// `Matrix::new`.
     pub fn new() -> Result<Self> {
         let settings = OutputSettingsBuilder::new()
             .scale(12) // each LED is a 12x12 square on the PC screen...
@@ -51,8 +51,7 @@ impl Matrix {
     pub fn show(&mut self) {
         self.window.update(&self.display);
 
-        // Closing the window acts like a Ctrl+C: the frame loop (`app::run`) receives
-        // the signal and stops the app cleanly, as on the Pi.
+        // Closing the window acts like a Ctrl+C: the app stops cleanly, as on the Pi
         if self
             .window
             .events()
@@ -63,7 +62,6 @@ impl Matrix {
             unsafe { libc::raise(libc::SIGINT) };
         }
 
-        // Can't fail (`Error = Infallible`): the pattern needs no `else` (see `State::draw`)
         let Ok(()) = self.display.clear(Rgb888::BLACK);
     }
 }

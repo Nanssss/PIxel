@@ -32,36 +32,29 @@ const DISPLAY_TIME: Duration = Duration::from_secs(2);
 /// If the app can't start (e.g. the matrix can't be created). Once started, it only
 /// returns `Ok`: runtime problems (network...) are handled by each state.
 pub async fn run() -> Result<()> {
-    // Listen for the stop signals before anything else: once registered, a signal
-    // no longer kills the process, it is only delivered to these streams.
+    // First thing: from now on, a stop signal ends the loop cleanly instead of killing the process
     let mut terminate = signal(SignalKind::terminate()).context("failed to listen for SIGTERM")?;
     let mut interrupt = signal(SignalKind::interrupt()).context("failed to listen for SIGINT")?;
 
-    // States that need the network start their background fetch task while the app is built
     let mut app = App::new().await?;
 
-    // Frame clock. Unlike `sleep(FRAME_PERIOD)`, an interval schedules its ticks on
-    // a fixed time grid (start + n * period): the time spent drawing a frame is not
-    // added to the wait, so the frame rate doesn't drift.
+    // Ticks on a fixed time grid: unlike `sleep`, the frame rate doesn't drift
     let mut frame_clock = interval(FRAME_PERIOD);
-    // If we are late (e.g. a frame took too long to draw), drop the missed frames
-    // instead of drawing them all in a row to catch up (the default, `Burst`).
+    // Frames missed while late are dropped, not drawn in a burst to catch up
     frame_clock.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     // When the current state came on screen
     let mut state_start = Instant::now();
 
     loop {
-        // Wait for the next frame unless a stop signal arrives first.
+        // Wait for the next frame, unless a stop signal arrives first
         tokio::select! {
             _ = frame_clock.tick() => {}
             _ = terminate.recv() => { info!("SIGTERM received"); break }
             _ = interrupt.recv() => { info!("SIGINT received"); break }
         }
 
-        // Time-based rather than counting frames
         if state_start.elapsed() >= DISPLAY_TIME {
-            // Never waits for the network: the data is fetched by background tasks
             app.next_state();
             state_start = Instant::now();
         }
@@ -80,8 +73,6 @@ pub async fn run() -> Result<()> {
 /// The running app: the states of the rotation, and the matrix they are drawn on.
 struct App {
     /// States of the rotation, in display order. Never empty (see `build_states`).
-    // A `Vec` can only hold values of a single type: `Box<dyn State>` is that type,
-    // a pointer to "some state", whatever its concrete type is.
     states: Vec<Box<dyn State>>,
     /// Index in `states` of the state currently on screen
     current: usize,
@@ -100,10 +91,10 @@ impl App {
         let config = AppConfig::load_or_default();
         info!("config:\n{config:?}");
 
-        // Only needed while the states are built: each background task keeps its own handle on it
+        // Only needed while the states are built: each task keeps its own client handle
         let context = AppContext::new()?;
 
-        // States that need the network start their background fetch task here.
+        // The network states start their background fetch task here
         let states = build_states(config, &context).await;
 
         Ok(App {
@@ -113,42 +104,28 @@ impl App {
         })
     }
 
-    /// Draws one frame: the current state, or a black screen if that state has
-    /// nothing to display.
-    ///
-    /// The current state has nothing to display in two cases:
-    /// - its data just got too old: it is skipped at the next state switch;
-    /// - no state can be displayed at all (e.g. only the weather is enabled, and
-    ///   there is no network): this lasts until some data arrives.
-    ///
-    /// Blanking the screen avoids leaving outdated data on it in the meantime.
+    /// Draws one frame: the current state, or a black screen if it has nothing to
+    /// display (its data just expired, or nothing is ready yet, e.g. no network).
     fn draw(&mut self) {
-        // Borrows `self.states` only: `self.matrix` can still be borrowed mutably
-        // at the same time, as the compiler tracks the borrow of each field separately.
-        // No `is_ready` check: a state with nothing to display draws nothing.
+        // No `is_ready` check: a state with nothing to display draws nothing
         self.states[self.current].draw(&mut self.matrix);
 
-        // Display the frame that was just drawn. If nothing was drawn, the frame is
-        // black: `show` clears the hidden buffer after each frame, so there is no
-        // need to fill it here.
+        // `show` clears the hidden buffer after each frame: each frame starts black
         self.matrix.show();
     }
 
     /// Switches to the next state that is ready to be displayed.
     ///
-    /// Never waits: the data is fetched by the background task of each state. A state
-    /// that isn't ready is skipped, and gets its chance again on the next rotation.
-    /// If no other state can be displayed, we stay on the current one.
+    /// Never waits: a state that isn't ready is skipped until the next rotation.
+    /// If no other state is ready, the current one stays.
     fn next_state(&mut self) {
         let count = self.states.len();
 
-        // Candidates, in order: every state after the current one, wrapping around
-        // at the end of the list (`% count`), and finally the current one itself.
+        // Every state after the current one, wrapping around, then the current one
         let next = (1..=count)
             .map(|offset| (self.current + offset) % count)
             .find(|&index| self.states[index].is_ready());
 
-        // No candidate is ready: keep the current state
         if let Some(index) = next {
             self.current = index;
         }
@@ -165,11 +142,8 @@ impl App {
 /// A state turned off in the config, or that failed to start, is left out. If none
 /// is left, the clock is used as a fallback: the returned list is never empty.
 async fn build_states(config: AppConfig, context: &AppContext) -> Vec<Box<dyn State>> {
-    // The type annotation matters: it makes each `Box::new(...)` below convert from
-    // a `Box<ClockState>` (or any other state) to a `Box<dyn State>`.
     let mut states: Vec<Box<dyn State>> = Vec::new();
 
-    // Each state takes ownership of its own part of the config (no clone needed)
     if let Some(clock) = ClockState::new(config.clock) {
         states.push(Box::new(clock));
     }
@@ -180,7 +154,6 @@ async fn build_states(config: AppConfig, context: &AppContext) -> Vec<Box<dyn St
         states.push(Box::new(gtasks));
     }
 
-    // No state is enabled: fall back to the clock, whatever the config says
     if states.is_empty() {
         warn!("No state is enabled! Falling back to Clock.");
         states.push(Box::new(ClockState::default()));

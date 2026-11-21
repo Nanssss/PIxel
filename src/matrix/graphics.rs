@@ -1,13 +1,5 @@
-//! Glue between the `embedded-graphics` crate and the LED matrix `Canvas`.
-//!
-//! `embedded-graphics` draws anything (shapes, text, images) on any type that
-//! implements its [`DrawTarget`] trait. A target only has to provide two things:
-//! - its size, through [`OriginDimensions`],
-//! - a way to set pixels, through [`DrawTarget::draw_iter`].
-//!
-//! Every other drawing method has a default implementation built on these two.
-//! We still override [`DrawTarget::clear`] because the C library has a much
-//! faster "fill the whole canvas" call than setting pixels one by one.
+//! `embedded-graphics` support for the LED matrix `Canvas`: implementing its
+//! [`DrawTarget`] trait lets the crate draw anything on it (shapes, text, images).
 //!
 //! The app draws on `Matrix` (see `display.rs`), which forwards to its offscreen `Canvas`.
 
@@ -19,8 +11,6 @@ use super::ffi::Color;
 use super::wrapper::Canvas;
 
 /// Converts an `embedded-graphics` color into the C library `Color` struct.
-///
-/// Implementing `From` gives us `Into` for free, so we can write `color.into()`.
 impl From<Rgb888> for Color {
     fn from(color: Rgb888) -> Self {
         Color {
@@ -31,14 +21,10 @@ impl From<Rgb888> for Color {
     }
 }
 
-/// Tells `embedded-graphics` how big the canvas is.
-///
-/// `OriginDimensions` (instead of `Dimensions`) means the drawable area
-/// starts at (0, 0), which is the case for the LED matrix.
+/// Size of the canvas. `Origin`: the drawable area starts at (0, 0).
 impl OriginDimensions for Canvas {
     fn size(&self) -> Size {
-        // `Canvas::size` is the inherent method returning `(i32, i32)`.
-        // Inherent methods take priority over trait methods with the same name.
+        // The inherent `Canvas::size` (inherent methods win over trait methods), not this one
         let (width, height) = Canvas::size(self);
         Size::new(width as u32, height as u32)
     }
@@ -48,8 +34,7 @@ impl DrawTarget for Canvas {
     /// The matrix is driven with 8 bits per channel, so `Rgb888` is a perfect fit.
     type Color = Rgb888;
 
-    /// Drawing on the canvas can never fail: `Infallible` is a type with no value,
-    /// so the compiler knows the `Err` case can't happen.
+    /// Drawing on the canvas can never fail.
     type Error = Infallible;
 
     /// Draws every pixel yielded by the iterator.
@@ -57,8 +42,7 @@ impl DrawTarget for Canvas {
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
-        // embedded-graphics may give coordinates outside of the screen
-        // (e.g. a shape partially off-screen): skip them.
+        // Pixels can be off the screen (e.g. a shape partially off-screen): skip them
         let bounds = self.bounding_box();
 
         for Pixel(point, color) in pixels {
@@ -70,7 +54,8 @@ impl DrawTarget for Canvas {
         Ok(())
     }
 
-    /// Fills the whole canvas with one color, using the fast C library call.
+    /// Fills the whole canvas with one color: a single C call, instead of one per pixel
+    /// (the default implementation).
     fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
         self.fill(color.into());
         Ok(())

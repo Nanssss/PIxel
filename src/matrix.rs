@@ -13,8 +13,7 @@ mod ffi;
 mod graphics;
 mod wrapper;
 
-// The app's `Matrix` is chosen at compile time: `#[cfg(...)]` only compiles the
-// item below it when its condition is true, so exactly one `Matrix` exists.
+// Exactly one `Matrix` is compiled: the real one, or the simulated one
 #[cfg(not(feature = "simulator"))]
 mod display;
 #[cfg(not(feature = "simulator"))]
@@ -26,6 +25,6 @@ mod simulator;
 pub use simulator::Matrix;
 
 /// Size of the panel, in pixels (shared by `display` and `simulator`).
-// `u32`: the type `embedded-graphics` uses for sizes
+/// `u32`, like the sizes of `embedded-graphics`.
 const PANEL_WIDTH: u32 = 64;
 const PANEL_HEIGHT: u32 = 32;
