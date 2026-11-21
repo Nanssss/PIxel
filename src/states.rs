@@ -22,19 +22,24 @@ use crate::matrix::Matrix;
 pub trait State {
     /// Whether the state has something to display right now.
     ///
-    /// A state that isn't ready (no data yet, or data that got too old) is skipped
-    /// by the rotation until it is ready again.
+    /// Only used by the rotation: a state that isn't ready (no data yet, or data
+    /// that got too old) is skipped until it is ready again.
     fn is_ready(&self) -> bool;
 
     /// Draws one frame of the state on the matrix.
     ///
-    /// Only called when the state is ready. Runs in the frame loop, 30 times per
-    /// second: no waiting, no I/O, no decoding. Prepare data in the constructor or
-    /// in the background `fetch` instead.
+    /// Called on every frame of the current state, ready or not: a state with
+    /// nothing to display draws nothing (the frame stays black). Its data is then
+    /// read only once per frame, here.
+    ///
+    /// Runs in the frame loop, 30 times per second: no waiting, no I/O, no decoding.
+    /// Prepare data in the constructor or in the background `fetch` instead.
     ///
     /// A color, font or style used by several states belongs in a shared module
     /// (e.g. `src/ui.rs`, to create with the first one), not copied in each state.
-    fn draw(&self, matrix: &mut Matrix);
+    // `&mut self`: a state can keep what changes from one frame to the next
+    // (animation step, scrolling position, cached text...).
+    fn draw(&mut self, matrix: &mut Matrix);
 }
 
 /// What the app shares with its states while it builds them.

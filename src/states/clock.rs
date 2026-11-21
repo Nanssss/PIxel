@@ -69,7 +69,7 @@ impl State for ClockState {
     }
 
     /// Draws the border, then the time (`HH:MM:SS`) in the middle of the panel.
-    fn draw(&self, matrix: &mut Matrix) {
+    fn draw(&mut self, matrix: &mut Matrix) {
         // The time of day is an input of the frame (like the elapsed time of an
         // animation), not fetched data: reading the system clock is local and cheap.
         let time = Local::now().format("%H:%M:%S").to_string();

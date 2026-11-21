@@ -116,7 +116,7 @@ impl App {
     /// Draws one frame: the current state, or a black screen if that state has
     /// nothing to display.
     ///
-    /// The current state isn't ready in two cases:
+    /// The current state has nothing to display in two cases:
     /// - its data just got too old: it is skipped at the next state switch;
     /// - no state can be displayed at all (e.g. only the weather is enabled, and
     ///   there is no network): this lasts until some data arrives.
@@ -124,12 +124,9 @@ impl App {
     /// Blanking the screen avoids leaving outdated data on it in the meantime.
     fn draw(&mut self) {
         // Borrows `self.states` only: `self.matrix` can still be borrowed mutably
-        // below, as the compiler tracks the borrow of each field separately.
-        let state = &self.states[self.current];
-
-        if state.is_ready() {
-            state.draw(&mut self.matrix);
-        }
+        // at the same time, as the compiler tracks the borrow of each field separately.
+        // No `is_ready` check: a state with nothing to display draws nothing.
+        self.states[self.current].draw(&mut self.matrix);
 
         // Display the frame that was just drawn. If nothing was drawn, the frame is
         // black: `show` clears the hidden buffer after each frame, so there is no

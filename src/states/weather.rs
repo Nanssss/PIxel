@@ -137,9 +137,8 @@ impl State for WeatherState {
     }
 
     /// Placeholder until the forecast is drawn: fills the panel in green.
-    fn draw(&self, matrix: &mut Matrix) {
-        // The app only draws a state that is ready, so the `else` is a safety net
-        // (the forecast may expire right between the two calls)
+    fn draw(&mut self, matrix: &mut Matrix) {
+        // No fresh forecast: draw nothing, the frame stays black
         let Some(_forecast) = self.forecast.latest() else {
             return;
         };

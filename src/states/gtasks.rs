@@ -126,9 +126,8 @@ impl State for GTasksState {
     }
 
     /// Placeholder until the tasks are drawn: fills the panel in blue.
-    fn draw(&self, matrix: &mut Matrix) {
-        // The app only draws a state that is ready, so the `else` is a safety net
-        // (the tasks may expire right between the two calls)
+    fn draw(&mut self, matrix: &mut Matrix) {
+        // No fresh list of tasks: draw nothing, the frame stays black
         let Some(_tasks) = self.tasks.latest() else {
             return;
         };
