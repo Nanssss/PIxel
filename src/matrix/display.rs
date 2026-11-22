@@ -74,13 +74,13 @@ impl Matrix {
     }
 }
 
-/// Drawing goes to the hidden buffer: nothing is visible until `Matrix::show`.
 impl OriginDimensions for Matrix {
     fn size(&self) -> Size {
         OriginDimensions::size(&self.offscreen)
     }
 }
 
+/// Drawing goes to the hidden buffer: nothing is visible until `Matrix::show`.
 impl DrawTarget for Matrix {
     type Color = Rgb888;
     type Error = Infallible;

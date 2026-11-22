@@ -66,13 +66,13 @@ impl Matrix {
     }
 }
 
-/// Like the real `Matrix`, the simulated one forwards drawing to its buffer.
 impl OriginDimensions for Matrix {
     fn size(&self) -> Size {
         self.display.size()
     }
 }
 
+/// Like the real `Matrix`, the simulated one forwards drawing to its buffer.
 impl DrawTarget for Matrix {
     type Color = Rgb888;
     type Error = Infallible;

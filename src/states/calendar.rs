@@ -20,7 +20,7 @@ use crate::matrix::Matrix;
 /// Events of the user's main calendar.
 /// Doc: <https://developers.google.com/workspace/calendar/api/v3/reference/events/list>
 const CALENDAR_API_URL: &str = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
-/// Access asked to the user: read only the calendar events.
+/// Access requested from the user: read only the calendar events.
 /// Other scopes: <https://developers.google.com/workspace/calendar/api/auth>
 const CALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.events.readonly"];
 
@@ -135,6 +135,7 @@ impl Fetcher for EventsFetcher {
 
     const NAME: &'static str = "calendar events";
 
+    /// A new event, or one just over, shows on the panel within 5 minutes
     const REFRESH_PERIOD: Duration = Duration::from_mins(5);
 
     /// The events are the next ones to come: an old list may show events already over

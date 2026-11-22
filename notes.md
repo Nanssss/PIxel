@@ -851,7 +851,7 @@ impls only matter if the matrix ever moves into a spawned task.
 
 ### `const` values, built at compile time
 
-*In the code:* `FRAME_PERIOD`, `BORDER_STYLE`, `TIME_FONT`, `CENTERED`, `PANEL_SIZE`
+*In the code:* `FRAME_PERIOD`, `BORDER_STYLE`, `TIME_STYLE`, `CENTERED`, `PANEL_SIZE`
 
 A `const` is computed by the compiler, and costs nothing at runtime. It can only call
 `const fn`s: `Duration::from_nanos`, `PrimitiveStyle::with_stroke`,

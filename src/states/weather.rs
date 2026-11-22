@@ -17,7 +17,7 @@ use crate::matrix::Matrix;
 /// Weather API (Open-Meteo: free, no key needed). Doc: <https://open-meteo.com/en/docs>
 const WEATHER_API_URL: &str = "https://api.open-meteo.com/v1/forecast";
 
-/// Daily values asked to the weather API: must match the fields of `DailyData`
+/// Daily values requested from the weather API: must match the fields of `DailyData`
 const DAILY_VARIABLES: &str =
     "weather_code,apparent_temperature_max,apparent_temperature_min,precipitation_sum";
 

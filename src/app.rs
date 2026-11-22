@@ -68,6 +68,7 @@ struct App {
     current: usize,
     /// When the current state came on screen
     last_shown: Instant,
+    /// The screen the states draw on
     matrix: Matrix,
 }
 

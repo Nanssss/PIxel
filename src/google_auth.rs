@@ -25,7 +25,7 @@ type Connector = <DefaultHyperClientBuilder as HyperClientBuilder>::Connector;
 
 impl GoogleAuth {
     /// Prepares the authentication. Only local files are read here: nothing is
-    /// asked to Google before the first call to [`GoogleAuth::token`].
+    /// requested from Google before the first call to [`GoogleAuth::token`].
     ///
     /// # Errors
     /// If the application secret can't be read, or the authenticator can't be built.

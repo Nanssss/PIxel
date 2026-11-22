@@ -20,7 +20,7 @@ use crate::matrix::Matrix;
 /// 1px red outline used for the panel border
 const BORDER_STYLE: PrimitiveStyle<Rgb888> = PrimitiveStyle::with_stroke(Rgb888::RED, 1);
 /// White 6x10 mono font for the time (font + color)
-const TIME_FONT: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_6X10, Rgb888::WHITE);
+const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_6X10, Rgb888::WHITE);
 /// Text centered horizontally and vertically on its anchor point
 const CENTERED: TextStyle = TextStyleBuilder::new()
     .alignment(Alignment::Center)
@@ -83,6 +83,6 @@ impl State for ClockState {
         let Ok(()) = screen.into_styled(BORDER_STYLE).draw(matrix);
 
         let Ok(_) =
-            Text::with_text_style(&self.text, screen.center(), TIME_FONT, CENTERED).draw(matrix);
+            Text::with_text_style(&self.text, screen.center(), TIME_STYLE, CENTERED).draw(matrix);
     }
 }

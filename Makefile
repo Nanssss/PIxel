@@ -39,7 +39,7 @@ deploy: target
 	@echo "==> Deployment complete!"
 
 # Install the systemd service on the Pi
-# The absolute deploy directory is asked to the Pi (TARGET_DIR may be relative to the home directory),
+# The absolute deploy directory is queried from the Pi (TARGET_DIR may be relative to the home directory),
 # then filled into the unit file, which is written to /etc/systemd/system.
 install:
 	@echo "==> Installing the $(SERVICE) service on $(TARGET_HOST)..."
