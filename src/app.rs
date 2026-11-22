@@ -49,9 +49,10 @@ pub async fn run() -> Result<()> {
     loop {
         // Wait for the next frame, unless a stop signal arrives first
         tokio::select! {
-            _ = frame_clock.tick() => {}
+            biased; // polled in order: a stop signal always wins over the next frame
             _ = terminate.recv() => { info!("SIGTERM received"); break }
             _ = interrupt.recv() => { info!("SIGINT received"); break }
+            _ = frame_clock.tick() => {}
         }
 
         if state_start.elapsed() >= DISPLAY_TIME {

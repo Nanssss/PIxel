@@ -55,6 +55,9 @@ main.rs               logging, panic hook, then app::run()
 
 `draw` only reads what was already fetched: a slow or dead network never freezes the display.
 
+Not even CPU work in a fetch (e.g. a TLS handshake) delays a frame, thanks to the second
+tokio worker: see [Where the code runs](#where-the-code-runs).
+
 ### Where the code runs
 
 ```text
@@ -66,7 +69,13 @@ main.rs               logging, panic hook, then app::run()
 ```
 
 `#[tokio::main]` runs `main` on the main thread. Spawned tasks run on the worker threads:
-one per CPU core, so a single one on the Pi Zero.
+one per CPU core by default, set to 2 here (`worker_threads = 2`).
+
+Why 2 on a single-core Pi Zero: the frame loop's timer is fired by a worker, not by the
+main thread (which just sleeps in `block_on`). With one worker, CPU work in a fetch (a TLS
+handshake: tens of ms) would leave nobody to fire the tick, and the frame would be late.
+With two, the idle one fires it on time, and the kernel preempts the busy one to run the
+frame loop. To reproduce the Pi's default on the PC: `TOKIO_WORKER_THREADS=1 make sim`.
 
 ### The matrix layers
 
@@ -557,7 +566,9 @@ tokio::select! {
 ```
 
 Dropping a future cancels it: only use futures that lose nothing when dropped (*cancel
-safe*), like these ones. When several are ready at once, the branch is picked at random.
+safe*), like these ones. When several are ready at once, the branch is picked at random,
+unless the `select!` starts with `biased;`: the branches are then polled in order. `app::run`
+uses it, with the signals first, so a stop signal always wins over the next frame.
 
 ### Unix signals
 
@@ -946,6 +957,9 @@ and its fields in a single `assert!`.
 - **Non-blocking file writes**: a dedicated thread writes the lines, so logging never
   waits for the SD card. Its `WorkerGuard` writes the last lines when dropped (see
   [`let _guard`](#let-_guard-keeps-a-value-alive-let-_-drops-it)).
+- **The console writes block**: the console layer writes to stdout right away, in the
+  thread that logs (under systemd: to the journal). Usually fast, but it can wait: never
+  log in `draw`. If needed, wrap stdout like the file: `tracing_appender::non_blocking(std::io::stdout())`.
 - **Line formats** (`fmt::format()`): full (default), `.compact()`, `.pretty()`, `.json()`
   (needs the `json` feature).
 - **Never log a secret** (OAuth2 token, credentials).
@@ -1019,7 +1033,8 @@ A single 1 GHz ARMv6 core and 512 MB of RAM. At 30 fps, a frame has 33 ms.
 - **Late frames are skipped**, not drawn in a burst (`MissedTickBehavior::Skip`).
 - **One C call fills the screen** (the `DrawTarget::clear` override), instead of 2048
   `set_pixel` calls.
-- **Logging doesn't block** (non-blocking file writer).
+- **Logging to the file doesn't block** (non-blocking file writer). The console writes do:
+  nothing is logged per frame.
 - **Release profile**: LTO and `codegen-units = 1`.
 
 ---

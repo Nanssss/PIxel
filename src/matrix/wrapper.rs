@@ -40,11 +40,14 @@ pub struct MatrixOptions {
 ///
 /// Only read while the matrix is created (C++ keeps no pointer to them),
 /// so [`RgbLedMatrix::new`] just borrows them.
+///
+/// No `daemon` field on purpose: it stays 0 (zeroed struct). The other values break
+/// the app: -1 never starts the refresh thread (`swap_on_vsync` then returns NULL),
+/// and 1 forks, which loses the tokio threads. systemd already runs the app in the background.
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeOptions {
     pub gpio_slowdown: i32,               // library default: 1 (2 on a Pi 4)
     pub rp1_pio: i32,                     // 0 = RP1 RIO, 1 = RP1 PIO (Pi 5 only)
-    pub daemon: i32,                      // -1 disabled, 0 off (default), 1 on
     pub drop_privileges: i32,             // -1 disabled, 0 off, 1 on (default)
     pub do_gpio_init: bool,               // library default: true
     pub drop_priv_user: Option<CString>,  // library default: "daemon"
@@ -203,7 +206,6 @@ impl RgbLedMatrix {
 
         rt_opts.gpio_slowdown = rt_options.gpio_slowdown;
         rt_opts.rp1_pio = rt_options.rp1_pio;
-        rt_opts.daemon = rt_options.daemon;
         rt_opts.drop_privileges = rt_options.drop_privileges;
         rt_opts.do_gpio_init = rt_options.do_gpio_init;
         rt_opts.drop_priv_user = opt_c_ptr(rt_options.drop_priv_user.as_deref());

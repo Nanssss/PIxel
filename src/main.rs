@@ -32,7 +32,8 @@ const LOG_FILES_KEPT: usize = 7;
 // =================================================================
 
 /// Sets up logging, then runs the app until it is asked to stop.
-#[tokio::main]
+// A 2nd worker keeps running the timers while the 1st one computes
+#[tokio::main(worker_threads = 2)]
 async fn main() -> Result<()> {
     // Not `let _`: the guard must live until the end of `main`, to flush the last logs
     let _log_guard = init_logging()?;
