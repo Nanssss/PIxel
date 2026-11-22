@@ -6,6 +6,8 @@ fn main() {
     // Project dirs
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let deps_dir = PathBuf::from(&manifest_dir).join("deps");
+    // Where the generated files go: one per target, set by Cargo
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     // Matrix library
     let matrix_dir = deps_dir.join("rpi-rgb-led-matrix");
     let include_dir = matrix_dir.join("include");
@@ -25,7 +27,7 @@ fn main() {
     // Build the C++ library out of tree, in OUT_DIR: one per target (host for
     // rust-analyzer, ARM for cross), so the two builds never overwrite each other's
     // objects. The submodule sources are only read.
-    let build_dir = PathBuf::from(env::var("OUT_DIR").unwrap()).join("rgbmatrix");
+    let build_dir = out_dir.join("rgbmatrix");
     // The compiler doesn't create directories: rp1/*.o objects need rp1/ to exist
     std::fs::create_dir_all(build_dir.join("rp1")).expect("Failed to create rgbmatrix build dir");
 
@@ -93,8 +95,7 @@ fn main() {
         .expect("Unable to generate bindings");
 
     // Written to OUT_DIR, and included by `src/matrix/ffi.rs`
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
+        .write_to_file(out_dir.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 }
