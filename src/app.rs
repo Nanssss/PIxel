@@ -43,9 +43,6 @@ pub async fn run() -> Result<()> {
     // Frames missed while late are dropped, not drawn in a burst to catch up
     frame_clock.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-    // When the current state came on screen
-    let mut state_start = Instant::now();
-
     loop {
         // Wait for the next frame, unless a stop signal arrives first
         tokio::select! {
@@ -55,11 +52,7 @@ pub async fn run() -> Result<()> {
             _ = frame_clock.tick() => {}
         }
 
-        if state_start.elapsed() >= DISPLAY_TIME {
-            app.next_state();
-            state_start = Instant::now();
-        }
-
+        app.rotate_if_due();
         app.draw();
     }
 
@@ -77,6 +70,8 @@ struct App {
     states: Vec<Box<dyn State>>,
     /// Index in `states` of the state currently on screen
     current: usize,
+    /// When the current state came on screen
+    last_shown: Instant,
     matrix: Matrix,
 }
 
@@ -101,6 +96,7 @@ impl App {
         Ok(App {
             states,
             current: 0,
+            last_shown: Instant::now(),
             matrix,
         })
     }
@@ -115,10 +111,18 @@ impl App {
         self.matrix.show();
     }
 
+    /// Moves on to the next state once the current one has been on screen for
+    /// `DISPLAY_TIME`.
+    fn rotate_if_due(&mut self) {
+        if self.last_shown.elapsed() >= DISPLAY_TIME {
+            self.next_state();
+        }
+    }
+
     /// Switches to the next state that is ready to be displayed.
     ///
     /// Never waits: a state that isn't ready is skipped until the next rotation.
-    /// If no other state is ready, the current one stays.
+    /// If no other state is ready, the current one stays for another `DISPLAY_TIME`.
     fn next_state(&mut self) {
         let count = self.states.len();
 
@@ -130,6 +134,7 @@ impl App {
         if let Some(index) = next {
             self.current = index;
         }
+        self.last_shown = Instant::now();
     }
 }
 
