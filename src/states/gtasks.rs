@@ -139,14 +139,14 @@ impl Fetcher for TasksFetcher {
 
     const NAME: &'static str = "Google Tasks";
 
-    const REFRESH_PERIOD: Duration = Duration::from_secs(5 * 60);
+    const REFRESH_PERIOD: Duration = Duration::from_mins(5);
 
     /// The tasks are the next ones to come: an old list may show tasks already over
-    const MAX_AGE: Duration = Duration::from_secs(60 * 60);
+    const MAX_AGE: Duration = Duration::from_hours(1);
 
     /// Longer than the default: on the first run, the fetch waits for the Google
     /// authorization to be completed in the browser.
-    const TIMEOUT: Duration = Duration::from_secs(120);
+    const TIMEOUT: Duration = Duration::from_mins(2);
 
     /// Fetches the next tasks from the GCalendar API
     async fn fetch(&mut self) -> Result<Vec<GTask>> {

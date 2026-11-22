@@ -388,8 +388,8 @@ Each implementation picks them once:
 ```rust
 impl Fetcher for TasksFetcher {
     type Data = Vec<GTask>;
-    const REFRESH_PERIOD: Duration = Duration::from_secs(5 * 60);
-    const TIMEOUT: Duration = Duration::from_secs(120); // replaces the default value
+    const REFRESH_PERIOD: Duration = Duration::from_mins(5);
+    const TIMEOUT: Duration = Duration::from_mins(2); // replaces the default value
     // ...
 }
 ```

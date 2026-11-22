@@ -166,10 +166,10 @@ impl Fetcher for ForecastFetcher {
     const NAME: &'static str = "weather data";
 
     /// The forecast only changes a few times a day
-    const REFRESH_PERIOD: Duration = Duration::from_secs(15 * 60);
+    const REFRESH_PERIOD: Duration = Duration::from_mins(15);
 
     /// A forecast of the day stays useful for a while, but not until the next day
-    const MAX_AGE: Duration = Duration::from_secs(2 * 60 * 60);
+    const MAX_AGE: Duration = Duration::from_hours(2);
 
     /// Fetches the forecast of the day from the weather API
     async fn fetch(&mut self) -> Result<Forecast> {
