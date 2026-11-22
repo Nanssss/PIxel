@@ -24,10 +24,10 @@ const FIRST_RETRY_DELAY: Duration = Duration::from_secs(30);
 /// client, URL, credentials...), and hands it to [`Feed::spawn`], which moves it
 /// into the background task.
 pub trait Fetcher: Send + 'static {
-    /// The data fetched (`Forecast`, `Vec<GTask>`...)
+    /// The data fetched (`Forecast`, `Vec<Event>`...)
     type Data: Send + Sync + 'static;
 
-    /// Name of the data, used in the logs (e.g. "weather data")
+    /// Name of the data, used in the logs (e.g. "weather forecast")
     const NAME: &'static str;
 
     /// How often the data is fetched

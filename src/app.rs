@@ -8,8 +8,8 @@ use tracing::{info, warn};
 
 use crate::config::AppConfig;
 use crate::matrix::Matrix;
+use crate::states::calendar::CalendarState;
 use crate::states::clock::ClockState;
-use crate::states::gtasks::GTasksState;
 use crate::states::weather::WeatherState;
 use crate::states::{AppContext, State};
 
@@ -156,8 +156,8 @@ async fn build_states(config: AppConfig, context: &AppContext) -> Vec<Box<dyn St
     if let Some(weather) = WeatherState::new(config.weather, context) {
         states.push(Box::new(weather));
     }
-    if let Some(gtasks) = GTasksState::new(config.gtasks, context).await {
-        states.push(Box::new(gtasks));
+    if let Some(calendar) = CalendarState::new(config.calendar, context).await {
+        states.push(Box::new(calendar));
     }
 
     if states.is_empty() {

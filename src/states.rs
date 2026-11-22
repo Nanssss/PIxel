@@ -3,8 +3,8 @@
 //! Each state lives in its own module and implements the [`State`] trait below,
 //! which is all the app (see `app.rs`) knows about it.
 
+pub mod calendar;
 pub mod clock;
-pub mod gtasks;
 pub mod weather;
 
 use anyhow::{Context, Result};

@@ -7,5 +7,5 @@ enabled = true
 latitude = 43.57
 longitude = 1.46
 
-[gtasks]
+[calendar]
 enabled = true

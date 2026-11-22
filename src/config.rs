@@ -12,8 +12,8 @@ use std::fs;
 use tracing::warn;
 
 use crate::paths::EXECUTABLE_DIR;
+use crate::states::calendar::CalendarConfig;
 use crate::states::clock::ClockConfig;
-use crate::states::gtasks::GTasksConfig;
 use crate::states::weather::WeatherConfig;
 
 /// Config file path, relative to the executable directory
@@ -26,7 +26,7 @@ const CONFIG_FILE_PATH: &str = "in/config.toml";
 pub struct AppConfig {
     pub clock: ClockConfig,
     pub weather: WeatherConfig,
-    pub gtasks: GTasksConfig,
+    pub calendar: CalendarConfig,
 }
 
 impl AppConfig {
@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn unknown_section_is_refused() {
         let config = r#"
-            [calendar]
+            [wether]
             enabled = false
         "#;
         assert!(toml::from_str::<AppConfig>(config).is_err());

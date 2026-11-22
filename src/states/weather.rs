@@ -163,7 +163,7 @@ struct ForecastFetcher {
 impl Fetcher for ForecastFetcher {
     type Data = Forecast;
 
-    const NAME: &'static str = "weather data";
+    const NAME: &'static str = "weather forecast";
 
     /// The forecast only changes a few times a day
     const REFRESH_PERIOD: Duration = Duration::from_mins(15);

@@ -31,7 +31,7 @@ Edit `in/config.toml` as you want. Here, you can enable/disable each state, and 
 
 ## Create your Google OAuth2 credentials
 
-If you want to use the GTasks feature, you must start by getting Google OAuth2 credentials.
+If you want to use the calendar feature, you must start by getting Google OAuth2 credentials.
 
 First, go to the [Google Cloud console](https://console.cloud.google.com/). Head to APIs and Services -> Credentials -> Create credentials -> OAuth client ID. The recommended type is "Desktop app": it is the one meant for devices that can't open a browser themselves.
 

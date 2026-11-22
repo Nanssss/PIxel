@@ -34,9 +34,9 @@ main.rs               logging, panic hook, then app::run()
 └─ app.rs             frame loop: draws the current state 30 times/s, rotates every 2 s
    ├─ config.rs       in/config.toml → AppConfig (one section per state)
    ├─ states.rs       the `State` trait
-   │  └─ states/      clock · weather · gtasks
+   │  └─ states/      clock · weather · calendar
    │     ├─ feed.rs   background fetching, for the network states
-   │     └─ google_auth.rs   OAuth2 tokens (gtasks)
+   │     └─ google_auth.rs   OAuth2 tokens (calendar)
    └─ matrix.rs       `Matrix`: the screen the states draw on (see "The matrix layers")
 ```
 
@@ -187,7 +187,7 @@ makes the closure take ownership of it.
 
 ### `'static` means "owns its data", not "lives forever"
 
-*In the code:* `Fetcher: Send + 'static`, `ForecastFetcher`, `TasksFetcher`
+*In the code:* `Fetcher: Send + 'static`, `ForecastFetcher`, `EventsFetcher`
 
 `T: 'static` means `T` holds no borrowed reference (except `&'static` ones). A spawned
 task can outlive the function that started it, so everything it uses must be owned: each
@@ -195,7 +195,7 @@ fetcher holds its own clone of the HTTP client, not a `&Client`.
 
 ### Take `Option<&T>`, not `&Option<T>`
 
-*In the code:* `opt_c_ptr`, `RgbLedMatrix::new`, `log_tasks`
+*In the code:* `opt_c_ptr`, `RgbLedMatrix::new`, `log_events`
 
 `Option<&CStr>` accepts any optional borrowed string, `&Option<CString>` forces the
 caller to own an `Option<CString>`. Convert with `as_deref`:
@@ -205,7 +205,7 @@ options.hardware_mapping.as_deref() // &Option<CString> → Option<&CStr>
 ```
 
 Same idea as taking `&str` rather than `&String`, or `&[T]` rather than `&Vec<T>`
-(`log_tasks(tasks: &[GTask])`).
+(`log_events(events: &[Event])`).
 
 ### Cheap clones: `Arc` and handles
 
@@ -260,7 +260,7 @@ systemd knows it failed. Cleaner than a panic.
 
 ### Log and carry on: `inspect_err`, `unwrap_or_default`, `.ok()?`
 
-*In the code:* `AppConfig::load_or_default`, `GTasksState::new`, `main`
+*In the code:* `AppConfig::load_or_default`, `CalendarState::new`, `main`
 
 ```rust
 Self::load()
@@ -270,7 +270,7 @@ Self::load()
 GoogleAuth::new()
     .await
     .inspect_err(|e| error!("...: {e:#}"))
-    .ok()?; // Result → Option, then `?` returns `None` from `GTasksState::new`
+    .ok()?; // Result → Option, then `?` returns `None` from `CalendarState::new`
 ```
 
 `?` also works on an `Option`, in a function returning an `Option`.
@@ -307,12 +307,12 @@ A fetch that hangs and a fetch that fails then go through the same `match`.
 
 ### HTTP errors aren't Rust errors: `error_for_status`
 
-*In the code:* `ForecastFetcher::fetch`, `TasksFetcher::fetch`
+*In the code:* `ForecastFetcher::fetch`, `EventsFetcher::fetch`
 
 For reqwest, a `404` or `401` response is a success: the request went through.
 `error_for_status()` turns the 4xx and 5xx statuses into errors. Without it, the body of
 the error would be parsed as data. For Google, an error has no `items`: it would silently
-look like "no task".
+look like "no event".
 
 ### `Infallible` and `let Ok(()) = ...`
 
@@ -366,7 +366,7 @@ second one wouldn't compile.
 *In the code:* `Feed`, `Feed::spawn`, `fetch_loop`
 
 Generic code is written once, and the compiler generates a copy for each type it is used
-with (*monomorphization*): `Feed<Forecast>`, `Feed<Vec<GTask>>`. Calls are resolved at
+with (*monomorphization*): `Feed<Forecast>`, `Feed<Vec<Event>>`. Calls are resolved at
 compile time (*static dispatch*), and can be inlined.
 
 |                                    | `dyn Trait` (`State`)         | generics (`Fetcher`)               |
@@ -386,8 +386,8 @@ methods returning `impl Trait`, isn't *dyn compatible*.
 Each implementation picks them once:
 
 ```rust
-impl Fetcher for TasksFetcher {
-    type Data = Vec<GTask>;
+impl Fetcher for EventsFetcher {
+    type Data = Vec<Event>;
     const REFRESH_PERIOD: Duration = Duration::from_mins(5);
     const TIMEOUT: Duration = Duration::from_mins(2); // replaces the default value
     // ...
@@ -622,17 +622,17 @@ A network down for hours then costs a few log lines, not thousands.
 
 ### Only the declared fields are read
 
-*In the code:* `WeatherResponse`, `TasksResponse`, `GTask`
+*In the code:* `WeatherResponse`, `CalendarResponse`, `Event`
 
 `#[derive(Deserialize)]` reads the fields of the struct, and ignores the other ones of the
 JSON (unless `#[serde(deny_unknown_fields)]`): declare only what you use.
 
-A missing field is an error, except for an `Option` (→ `None`, e.g. `GTask::description`)
+A missing field is an error, except for an `Option` (→ `None`, e.g. `Event::description`)
 or a field with a default.
 
 ### `#[serde(default)]`
 
-*In the code:* `AppConfig`, `ClockConfig`, `WeatherConfig`, `GTasksConfig`, `GTask::title`, `TasksResponse::items`
+*In the code:* `AppConfig`, `ClockConfig`, `WeatherConfig`, `CalendarConfig`, `Event::title`, `CalendarResponse::items`
 
 - On a **struct**: a missing field takes its value from the struct's `Default`. A partial
   config stays valid:
@@ -647,7 +647,7 @@ or a field with a default.
 
 ### `deny_unknown_fields`: typos in the config
 
-*In the code:* `AppConfig`, `ClockConfig`, `WeatherConfig`, `GTasksConfig`
+*In the code:* `AppConfig`, `ClockConfig`, `WeatherConfig`, `CalendarConfig`
 
 Two opposite choices, on purpose:
 
@@ -673,23 +673,23 @@ TOML parse error at line 5, column 1
 unknown field `enabeld`, expected one of `enabled`, `latitude`, `longitude`
 ```
 
-The same goes for an unknown section (`[calendar]`): it is checked on `AppConfig`.
+The same goes for an unknown section (`[wether]`): it is checked on `AppConfig`.
 
 ### `rename`
 
-*In the code:* `GTask::title` (`"summary"`), `TaskStart::At` (`"dateTime"`)
+*In the code:* `Event::title` (`"summary"`), `EventStart::At` (`"dateTime"`)
 
 Gives a field a Rust name that differs from its JSON name.
 
 ### `untagged` enums
 
-*In the code:* `TaskStart`
+*In the code:* `EventStart`
 
 serde tries each variant in order, and keeps the first one matching the JSON:
 
 ```text
-{ "dateTime": "2026-11-15T18:30:00+01:00", "timeZone": "Europe/Paris" }  → TaskStart::At
-{ "date": "2026-11-15" }                                                → TaskStart::AllDay
+{ "dateTime": "2026-11-15T18:30:00+01:00", "timeZone": "Europe/Paris" }  → EventStart::At
+{ "date": "2026-11-15" }                                                → EventStart::AllDay
 { }                                                                     → error
 ```
 
@@ -698,7 +698,7 @@ shape is checked by the type.
 
 ### Let the types check the data
 
-*In the code:* `DailyData` (`[f32; 1]`), `TaskStart`
+*In the code:* `DailyData` (`[f32; 1]`), `EventStart`
 
 The weather API returns a list for each value, with one element per day. A fixed-size
 array makes serde check the length (`[]` and `[1.0, 2.0]` are both refused), so
@@ -709,7 +709,7 @@ feature): an invalid date is refused while parsing, not found later.
 
 ### One config section per state
 
-*In the code:* config.rs, `ClockConfig`, `WeatherConfig`, `GTasksConfig`
+*In the code:* config.rs, `ClockConfig`, `WeatherConfig`, `CalendarConfig`
 
 Each state declares its config in its own module, with private fields: only the state
 reads them. `AppConfig` only gathers the sections, and `build_states` moves each one into
@@ -929,7 +929,7 @@ Iterators are lazy: `find` stops at the first match, and nothing is allocated.
 
 ### `let ... else`
 
-*In the code:* `WeatherState::draw`, `GTasksState::draw`
+*In the code:* `WeatherState::draw`, `CalendarState::draw`
 
 ```rust
 let Some(forecast) = self.forecast.latest() else {
@@ -961,7 +961,7 @@ conversion: `u8::try_from(x)?`.
 
 ### `matches!`
 
-*In the code:* `tasks_are_read_from_the_api_response`
+*In the code:* `events_are_read_from_the_api_response`
 
 `matches!(value, pattern if condition)` returns a `bool`: handy to check an enum variant
 and its fields in a single `assert!`.
@@ -982,7 +982,7 @@ and its fields in a single `assert!`.
   ```sh
   RUST_LOG=debug ./PIxel                               # everything, dependencies included
   RUST_LOG=PIxel=debug ./PIxel                         # the app only (target = binary name)
-  RUST_LOG=info,PIxel::states::gtasks=trace ./PIxel    # one module in detail
+  RUST_LOG=info,PIxel::states::calendar=trace ./PIxel  # one module in detail
   ```
 
 - **Non-blocking file writes**: a dedicated thread writes the lines, so logging never
@@ -1073,7 +1073,7 @@ A single 1 GHz ARMv6 core and 512 MB of RAM. At 30 fps, a frame has 33 ms.
 
 ## Tests
 
-*In the code:* the `tests` modules of config.rs, weather.rs and gtasks.rs
+*In the code:* the `tests` modules of config.rs, weather.rs and calendar.rs
 
 ```rust
 #[cfg(test)]      // compiled by `cargo test` only
@@ -1089,9 +1089,9 @@ mod tests {
 - Test names are sentences: a failing test reads as the broken rule.
 - Parsing is tested with real API responses (shortened), in raw strings `r#"..."#`: no
   need to escape the `"`.
-- Each edge case gets its own test: no day in the response, no `items`, a task without
+- Each edge case gets its own test: no day in the response, no `items`, an event without
   start, a typo in the config.
-- A test must not depend on the machine: `tasks_are_read_from_the_api_response` compares
+- A test must not depend on the machine: `events_are_read_from_the_api_response` compares
   instants, not local times.
 - `.unwrap()` is fine in tests: a panic is a failed test.
 - `serde_json` is in `[dev-dependencies]`: only compiled for the tests.
