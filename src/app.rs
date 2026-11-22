@@ -22,9 +22,7 @@ const FRAME_PERIOD: Duration = Duration::from_nanos(1_000_000_000 / FRAME_RATE);
 /// How long each state stays on screen
 const DISPLAY_TIME: Duration = Duration::from_secs(2);
 
-// =================================================================
-//    Frame loop                                                   |
-// =================================================================
+// ===== Frame loop =====
 
 /// Runs the app: builds it, then draws frames until the process is asked to stop.
 ///
@@ -60,9 +58,7 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
-// =================================================================
-//    App part                                                     |
-// =================================================================
+// ===== App =====
 
 /// The running app: the states of the rotation, and the matrix they are drawn on.
 struct App {
@@ -138,9 +134,7 @@ impl App {
     }
 }
 
-// =================================================================
-//    Helpers                                                      |
-// =================================================================
+// ===== Helpers =====
 
 /// Builds the states of the rotation, in display order: adding a state to the app
 /// only takes a new block here.

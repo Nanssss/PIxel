@@ -15,6 +15,8 @@ use anyhow::{Context, Result, bail};
 
 use super::ffi::{self, Color};
 
+// ===== Options =====
+
 // About both option structs below:
 // **`0` / `false` / `None` means "library default", not zero**: the C API only
 // copies non-zero fields over its own defaults (`OPT_COPY_IF_SET` in `led-matrix-c.cc`).
@@ -66,6 +68,8 @@ pub struct RuntimeOptions {
     /// library default: "daemon"
     pub drop_priv_group: Option<CString>,
 }
+
+// ===== Canvas =====
 
 /// A handle to a drawing surface (C `LedCanvas`), owned by the C matrix.
 ///
@@ -142,6 +146,8 @@ impl Canvas {
     }
 }
 
+// ===== Font =====
+
 /// A BDF font loaded by the C library, to draw text with [`Canvas::draw_text`].
 ///
 /// Invariant: `ptr` is never null (`load` returns an error instead), and is only
@@ -174,6 +180,8 @@ impl Drop for Font {
         unsafe { ffi::delete_font(self.ptr) }
     }
 }
+
+// ===== RgbLedMatrix =====
 
 /// The LED matrix itself (C `RGBLedMatrix`): owns the hardware and its refresh thread.
 ///
@@ -288,6 +296,8 @@ impl Drop for RgbLedMatrix {
         unsafe { ffi::led_matrix_delete(self.ptr) }
     }
 }
+
+// ===== Helpers =====
 
 /// Pointer to the string, or null for `None` (= "library default" for the C API).
 fn opt_c_ptr(s: Option<&CStr>) -> *const c_char {

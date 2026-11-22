@@ -1132,7 +1132,9 @@ Run them on the PC with `cargo test`: no Pi needed.
   - `//` in the code: only the *why* the code can't tell;
   - `// SAFETY:` before every `unsafe` block;
   - the Rust concepts are explained here, not in the code.
-- **Sections**: `// ===` banners split the long files (`Frame loop`, `Background task`, `Tests`...).
+- **Sections**: only in the long files, one-line banners named after what follows: a type
+  (`// ===== App =====`), its impls (`// ===== impl WeatherState =====`) or a role
+  (`// ===== Background task =====`). `mod tests` needs none: it is already a section.
 - **Formatting**: `cargo fmt` before committing (rules in `rustfmt.toml`).
 - **Lints**: `cargo clippy`. Its warnings in `bindings.rs` come from the generated code.
 - **Errors**: `anyhow::Result` with `context`, messages in lowercase without a final period.

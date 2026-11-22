@@ -69,9 +69,7 @@ pub struct CalendarState {
     events: Feed<Vec<Event>>,
 }
 
-// =================================================================
-//    Methods implementation                                       |
-// =================================================================
+// ===== impl CalendarState =====
 
 impl CalendarState {
     /// Creates the state, and starts the background task fetching the events.
@@ -119,9 +117,7 @@ impl State for CalendarState {
     }
 }
 
-// =================================================================
-//    Background task                                              |
-// =================================================================
+// ===== Background task =====
 
 /// Fetches the events for the background task of the state.
 ///
@@ -182,9 +178,7 @@ impl Fetcher for EventsFetcher {
     }
 }
 
-// =================================================================
-//    Helpers                                                      |
-// =================================================================
+// ===== Helpers =====
 
 /// Logs how many events were fetched, and each of them at the `debug` level.
 fn log_events(events: &[Event]) {
@@ -199,9 +193,7 @@ fn log_events(events: &[Event]) {
     }
 }
 
-// =================================================================
-//    Private types                                                |
-// =================================================================
+// ===== API response =====
 
 /// Response of the calendar API (only the field used: the others are ignored).
 #[derive(Debug, Deserialize)]
@@ -210,10 +202,6 @@ struct CalendarResponse {
     #[serde(default)]
     items: Vec<Event>,
 }
-
-// =================================================================
-//    Tests                                                        |
-// =================================================================
 
 #[cfg(test)]
 mod tests {

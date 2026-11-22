@@ -101,9 +101,7 @@ pub struct WeatherState {
     forecast: Feed<Forecast>,
 }
 
-// =================================================================
-//    Methods implementation                                       |
-// =================================================================
+// ===== impl WeatherState =====
 
 impl WeatherState {
     /// Creates the state, and starts the background task fetching the forecast.
@@ -144,9 +142,7 @@ impl State for WeatherState {
     }
 }
 
-// =================================================================
-//    Background task                                              |
-// =================================================================
+// ===== Background task =====
 
 /// Fetches the forecast for the background task of the state.
 ///
@@ -209,9 +205,7 @@ impl Fetcher for ForecastFetcher {
     }
 }
 
-// =================================================================
-//    Private types                                                |
-// =================================================================
+// ===== API response =====
 
 /// Response of the weather API (only the fields used: the others are ignored).
 #[derive(Debug, Deserialize)]
@@ -244,10 +238,6 @@ impl From<DailyData> for Forecast {
         }
     }
 }
-
-// =================================================================
-//    Tests                                                        |
-// =================================================================
 
 #[cfg(test)]
 mod tests {

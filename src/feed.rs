@@ -14,9 +14,7 @@ use tracing::warn;
 /// doubled after each further failure in a row
 const FIRST_RETRY_DELAY: Duration = Duration::from_secs(30);
 
-// =================================================================
-//    Fetcher part (what a state provides)                         |
-// =================================================================
+// ===== Fetcher =====
 
 /// How to fetch the data of a state.
 ///
@@ -49,9 +47,7 @@ pub trait Fetcher: Send + 'static {
     fn fetch(&mut self) -> impl Future<Output = Result<Self::Data>> + Send;
 }
 
-// =================================================================
-//    Feed part (what a state gets back)                           |
-// =================================================================
+// ===== Feed =====
 
 /// Latest data fetched by the background task of a state.
 ///
@@ -115,9 +111,7 @@ impl<T> Feed<T> {
     }
 }
 
-// =================================================================
-//    Background task                                              |
-// =================================================================
+// ===== Background task =====
 
 /// Fetches the data and publishes each new value to the feed, until the feed is dropped.
 ///

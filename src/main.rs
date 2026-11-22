@@ -27,10 +27,6 @@ const LOG_DIR: &str = "logs";
 /// Number of daily log files kept, so the SD card never fills up
 const LOG_FILES_KEPT: usize = 7;
 
-// =================================================================
-//    main function                                                |
-// =================================================================
-
 /// Sets up logging, then runs the app until it is asked to stop.
 // A 2nd worker keeps running the timers while the 1st one computes
 #[tokio::main(worker_threads = 2)]
@@ -45,10 +41,6 @@ async fn main() -> Result<()> {
         .await
         .inspect_err(|e| error!("Fatal error: {e:#}"))
 }
-
-// =================================================================
-//    Helpers                                                      |
-// =================================================================
 
 /// Sets up logging, to the console and to a daily log file.
 ///

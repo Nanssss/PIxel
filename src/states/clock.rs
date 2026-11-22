@@ -54,10 +54,6 @@ pub struct ClockState {
     shown_at: i64,
 }
 
-// =================================================================
-//    Methods implementation                                       |
-// =================================================================
-
 impl ClockState {
     /// Creates the clock, or returns `None` if it is turned off in the config.
     pub fn new(config: ClockConfig) -> Option<Self> {
