@@ -2,16 +2,17 @@
 //!
 //! The forecast is fetched in the background (see `feed.rs`) from the Open-Meteo API.
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
 use serde::Deserialize;
-use tokio::time::Duration;
 use tracing::{info, trace};
 
+use super::{AppContext, State};
 use crate::feed::{Feed, Fetcher};
 use crate::matrix::Matrix;
-use crate::states::{AppContext, State};
 
 /// Weather API (Open-Meteo: free, no key needed). Doc: <https://open-meteo.com/en/docs>
 const WEATHER_API_URL: &str = "https://api.open-meteo.com/v1/forecast";

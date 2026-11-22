@@ -3,18 +3,19 @@
 //! The events are fetched in the background (see `feed.rs`) from the Google
 //! Calendar API, with the OAuth2 tokens of `google_auth.rs`.
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveDate, Utc};
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
 use serde::Deserialize;
-use tokio::time::Duration;
 use tracing::{debug, error, info};
 
+use super::{AppContext, State};
 use crate::feed::{Feed, Fetcher};
 use crate::google_auth::GoogleAuth;
 use crate::matrix::Matrix;
-use crate::states::{AppContext, State};
 
 /// Events of the user's main calendar.
 /// Doc: <https://developers.google.com/workspace/calendar/api/v3/reference/events/list>

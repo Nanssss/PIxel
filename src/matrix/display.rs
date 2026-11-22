@@ -6,7 +6,7 @@
 //! Usage: draw on the `Matrix` with `use embedded_graphics::prelude::*;` and
 //! `drawable.draw(matrix)`, then call `matrix.show()` to display the frame.
 
-use core::convert::Infallible;
+use std::convert::Infallible;
 use std::ffi::CString;
 use std::os::unix::fs::MetadataExt;
 

@@ -13,8 +13,8 @@ use embedded_graphics::{
 };
 use serde::Deserialize;
 
+use super::State;
 use crate::matrix::Matrix;
-use crate::states::State;
 
 // Drawing styles, built once at compile time
 /// 1px red outline used for the panel border

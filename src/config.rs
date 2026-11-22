@@ -6,9 +6,10 @@
 //! Every config struct refuses unknown keys (`deny_unknown_fields`): a typo such as
 //! `enabeld` is reported, instead of being silently ignored.
 
+use std::fs;
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::fs;
 use tracing::warn;
 
 use crate::paths;

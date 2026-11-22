@@ -955,6 +955,32 @@ In main.rs, `paths::log_dir()` needs no `use` at all: `mod paths;` already puts 
 in scope there (main.rs is the crate root). `use crate::paths;` would even fail: the name
 would be defined twice.
 
+### Import paths: `std`, `super::`, `crate::`
+
+*In the code:* the `use` blocks of every file (e.g. weather.rs)
+
+```rust
+use std::time::Duration;            // 1. the standard library
+
+use anyhow::{Context, Result};      // 2. external crates
+use serde::Deserialize;
+
+use super::{AppContext, State};     // 3. this crate: the parent module...
+use crate::matrix::Matrix;          //    ...and the others, from the crate root
+```
+
+- **Three groups**, separated by a blank line. `cargo fmt` sorts the lines inside a group,
+  but doesn't make the groups (that option is nightly-only).
+- **`std::`, not `core::`**: `core` is the part of `std` that works without an OS, used by
+  `no_std` crates such as embedded-graphics. Same types (`core::convert::Infallible` is
+  `std::convert::Infallible`), but an app with `std` writes `std::`.
+- **The original path, not a re-export**: `tokio::time::Duration` is `std::time::Duration`
+  re-exported. Import it from `std` when it's the only thing needed; app.rs and feed.rs
+  take it from `tokio::time` with the rest (`Instant`, `sleep`...).
+- **`super::` for the parent module** (`states/weather.rs` → `states.rs`, `matrix/display.rs`
+  → `matrix.rs`), **`crate::` for the others**: `super::` shows the close link, and keeps
+  working if the parent module is moved.
+
 ### `bool::then`
 
 *In the code:* `ClockState::new`, build.rs
@@ -1165,6 +1191,8 @@ Run them on the PC with `cargo test`: no Pi needed.
   (`// ===== Background task =====`). `mod tests` needs none: it is already a section.
 - **Formatting**: `cargo fmt` before committing (rules in `rustfmt.toml`).
 - **Lints**: `cargo clippy`. Its warnings in `bindings.rs` come from the generated code.
+- **Imports**: three groups (`std`, external crates, this crate), `super::` for the parent
+  module and `crate::` for the others (see [Import paths](#import-paths-std-super-crate)).
 - **Errors**: `anyhow::Result` with `context`, messages in lowercase without a final period.
 - **Panics**: `expect("... should ...")` in lowercase, saying what should have been true
   (see [When to panic](#when-to-panic)).

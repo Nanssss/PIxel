@@ -6,7 +6,7 @@
 //!
 //! Usage: `cargo run --features simulator` (needs SDL2: `sudo apt install libsdl2-dev`).
 
-use core::convert::Infallible;
+use std::convert::Infallible;
 
 use anyhow::Result;
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};

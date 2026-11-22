@@ -3,7 +3,7 @@
 //!
 //! The app draws on `Matrix` (see `display.rs`), which forwards to its offscreen `Canvas`.
 
-use core::convert::Infallible;
+use std::convert::Infallible;
 
 use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 
