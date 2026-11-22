@@ -11,13 +11,10 @@ use serde::Deserialize;
 use std::fs;
 use tracing::warn;
 
-use crate::paths::EXECUTABLE_DIR;
+use crate::paths;
 use crate::states::calendar::CalendarConfig;
 use crate::states::clock::ClockConfig;
 use crate::states::weather::WeatherConfig;
-
-/// Config file path, relative to the executable directory
-const CONFIG_FILE_PATH: &str = "in/config.toml";
 
 /// The whole config: one section per state (`[clock]`, `[weather]`...).
 /// A section missing from the file takes its default values.
@@ -43,7 +40,7 @@ impl AppConfig {
     /// # Errors
     /// If the file can't be read, or isn't a valid config.
     fn load() -> Result<Self> {
-        let config_file_path = EXECUTABLE_DIR.join(CONFIG_FILE_PATH);
+        let config_file_path = paths::config_file();
 
         let content = fs::read_to_string(&config_file_path)
             .with_context(|| format!("failed to read {}", config_file_path.display()))?;

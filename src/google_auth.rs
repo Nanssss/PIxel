@@ -11,14 +11,7 @@ use yup_oauth2::{
     InstalledFlowReturnMethod,
 };
 
-use crate::paths::EXECUTABLE_DIR;
-
-/// Application secret, relative to the executable directory. Generate this file
-/// from the Google Cloud console: <https://console.cloud.google.com/>
-const CREDENTIALS_FILE: &str = "in/credentials.json";
-
-/// Where the tokens are cached, relative to the executable directory
-const TOKEN_FILE: &str = "in/tokencache.json";
+use crate::paths;
 
 /// Gives out the access tokens needed to call the Google APIs.
 ///
@@ -37,7 +30,7 @@ impl GoogleAuth {
     /// # Errors
     /// If the application secret can't be read, or the authenticator can't be built.
     pub async fn new() -> Result<Self> {
-        let secret_path = EXECUTABLE_DIR.join(CREDENTIALS_FILE);
+        let secret_path = paths::credentials_file();
         let secret = yup_oauth2::read_application_secret(&secret_path)
             .await
             .with_context(|| {
@@ -51,7 +44,7 @@ impl GoogleAuth {
         // and Google redirects it to a local HTTP server started by the authenticator
         let authenticator =
             InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
-                .persist_tokens_to_disk(EXECUTABLE_DIR.join(TOKEN_FILE))
+                .persist_tokens_to_disk(paths::token_file())
                 .build()
                 .await
                 .context("failed to create InstalledFlowAuthenticator")?;

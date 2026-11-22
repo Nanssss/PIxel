@@ -18,12 +18,8 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
-use crate::paths::EXECUTABLE_DIR;
-
 /// Name of the app, used as the prefix of the log files
 const APP_NAME: &str = env!("CARGO_BIN_NAME");
-/// Log directory, relative to the executable directory
-const LOG_DIR: &str = "logs";
 /// Number of daily log files kept, so the SD card never fills up
 const LOG_FILES_KEPT: usize = 7;
 
@@ -56,7 +52,7 @@ fn init_logging() -> Result<WorkerGuard> {
         .filename_prefix(APP_NAME)
         .filename_suffix("log")
         .max_log_files(LOG_FILES_KEPT)
-        .build(EXECUTABLE_DIR.join(LOG_DIR))
+        .build(paths::log_dir())
         .context("failed to create the log file")?;
 
     // Written by a dedicated thread: logging never waits for the SD card

@@ -38,6 +38,8 @@ main.rs               logging, panic hook, then app::run()
    │     ├─ feed.rs   background fetching, for the network states
    │     └─ google_auth.rs   OAuth2 tokens (calendar)
    └─ matrix.rs       `Matrix`: the screen the states draw on (see "The matrix layers")
+
+paths.rs              where the files are (config, credentials, logs): used by all
 ```
 
 ### Two loops that never wait for each other
@@ -926,6 +928,25 @@ impl Condition {
 One exception, on purpose: `OriginDimensions::size` for `Canvas` calls `Canvas::size(self)`,
 the inherent method (see [Same method name in a type and a trait](#same-method-name-in-a-type-and-a-trait)).
 `Self::size(self)` would call the same method, but would read like the function calling itself.
+
+### Call a function through its module
+
+*In the code:* `paths::config_file()`, `paths::log_dir()`...
+
+For a function, `use` its module rather than the function itself: the call then shows
+where it comes from.
+
+```rust
+use crate::paths;           // in config.rs
+paths::config_file()        // clearly the app's paths, not a local function
+```
+
+Types and traits are imported directly instead (`use crate::matrix::Matrix;`): their name
+is already clear on its own.
+
+In main.rs, `paths::log_dir()` needs no `use` at all: `mod paths;` already puts the module
+in scope there (main.rs is the crate root). `use crate::paths;` would even fail: the name
+would be defined twice.
 
 ### `bool::then`
 
