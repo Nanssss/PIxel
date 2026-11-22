@@ -128,8 +128,10 @@ impl State for GTasksState {
 ///
 /// Owns everything a fetch needs: the task outlives the function that starts it.
 struct TasksFetcher {
-    client: Client,   // HTTP client shared with the other states
-    auth: GoogleAuth, // Google authentication, prepared once at startup
+    /// HTTP client shared with the other states
+    client: Client,
+    /// Google authentication, prepared once at startup
+    auth: GoogleAuth,
 }
 
 impl Fetcher for TasksFetcher {
@@ -182,7 +184,7 @@ impl Fetcher for TasksFetcher {
 }
 
 // =================================================================
-//    Static functions                                             |
+//    Helpers                                                      |
 // =================================================================
 
 /// Logs how many tasks were fetched, and each of them at the `debug` level.

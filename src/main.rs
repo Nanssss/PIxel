@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
 }
 
 // =================================================================
-//    Static functions                                             |
+//    Helpers                                                      |
 // =================================================================
 
 /// Sets up logging, to the console and to a daily log file.

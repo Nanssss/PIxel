@@ -46,10 +46,14 @@ impl Default for WeatherConfig {
 /// Forecast of the day, as shown on the panel.
 #[derive(Debug)]
 struct Forecast {
-    condition: Condition,   // weather of the day: tells which icon to draw
-    temp_max: f32,          // maximum daily temperature, in °C
-    temp_min: f32,          // minimum daily temperature, in °C
-    precipitation_sum: f32, // sum of daily precipitations (rain, snow, hail), in mm
+    /// Weather of the day: tells which icon to draw
+    condition: Condition,
+    /// Maximum daily temperature, in °C
+    temp_max: f32,
+    /// Minimum daily temperature, in °C
+    temp_min: f32,
+    /// Sum of the day's precipitation (rain, snow, hail), in mm
+    precipitation_sum: f32,
 }
 
 /// Weather of the day, grouped by the icon that shows it.
@@ -93,7 +97,8 @@ impl Condition {
 
 /// Shows the forecast of the day, fetched by a background task (see `Feed`).
 pub struct WeatherState {
-    forecast: Feed<Forecast>, // latest forecast published by the background task
+    /// Latest forecast published by the background task
+    forecast: Feed<Forecast>,
 }
 
 // =================================================================
@@ -147,8 +152,11 @@ impl State for WeatherState {
 ///
 /// Owns everything a fetch needs: the task outlives the function that starts it.
 struct ForecastFetcher {
-    client: Client, // HTTP client shared with the other states
-    latitude: f64,  // place the forecast is fetched for (see `WeatherConfig`)
+    /// HTTP client shared with the other states
+    client: Client,
+    /// Latitude of the place, from `WeatherConfig`
+    latitude: f64,
+    /// Longitude of the place, from `WeatherConfig`
     longitude: f64,
 }
 
@@ -215,10 +223,14 @@ struct WeatherResponse {
 /// We ask for a single day: `[_; 1]` makes serde refuse any other length.
 #[derive(Debug, Deserialize)]
 struct DailyData {
-    weather_code: [u8; 1],              // WMO code, see `Condition::from_wmo`
-    apparent_temperature_max: [f32; 1], // °C
-    apparent_temperature_min: [f32; 1], // °C
-    precipitation_sum: [f32; 1],        // mm
+    /// WMO code, see `Condition::from_wmo`
+    weather_code: [u8; 1],
+    /// In °C
+    apparent_temperature_max: [f32; 1],
+    /// In °C
+    apparent_temperature_min: [f32; 1],
+    /// In mm
+    precipitation_sum: [f32; 1],
 }
 
 /// Turns what the API sent into what the state displays.

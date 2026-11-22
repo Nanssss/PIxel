@@ -27,13 +27,20 @@ use super::ffi::{self, Color};
 /// options for its whole life.
 #[derive(Debug, Clone, Default)]
 pub struct MatrixOptions {
-    pub rows: i32,                         // library default: 32
-    pub cols: i32,                         // library default: 32
-    pub chain_length: i32,                 // library default: 1
-    pub parallel: i32,                     // library default: 1
-    pub brightness: i32,                   // library default: 100
-    pub hardware_mapping: Option<CString>, // library default: "regular"
-    pub led_rgb_sequence: Option<CString>, // library default: "RGB"
+    /// library default: 32
+    pub rows: i32,
+    /// library default: 32
+    pub cols: i32,
+    /// library default: 1
+    pub chain_length: i32,
+    /// library default: 1
+    pub parallel: i32,
+    /// library default: 100
+    pub brightness: i32,
+    /// library default: "regular"
+    pub hardware_mapping: Option<CString>,
+    /// library default: "RGB"
+    pub led_rgb_sequence: Option<CString>,
 }
 
 /// Runtime options (C `RGBLedRuntimeOptions`). See the note above about zeros.
@@ -46,12 +53,18 @@ pub struct MatrixOptions {
 /// and 1 forks, which loses the tokio threads. systemd already runs the app in the background.
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeOptions {
-    pub gpio_slowdown: i32,               // library default: 1 (2 on a Pi 4)
-    pub rp1_pio: i32,                     // 0 = RP1 RIO, 1 = RP1 PIO (Pi 5 only)
-    pub drop_privileges: Option<bool>,    // None: library default (on)
-    pub do_gpio_init: bool,               // library default: true
-    pub drop_priv_user: Option<CString>,  // library default: "daemon"
-    pub drop_priv_group: Option<CString>, // library default: "daemon"
+    /// library default: 1 (2 on a Pi 4)
+    pub gpio_slowdown: i32,
+    /// 0 = RP1 RIO, 1 = RP1 PIO (Pi 5 only)
+    pub rp1_pio: i32,
+    /// None: library default (on)
+    pub drop_privileges: Option<bool>,
+    /// library default: true
+    pub do_gpio_init: bool,
+    /// library default: "daemon"
+    pub drop_priv_user: Option<CString>,
+    /// library default: "daemon"
+    pub drop_priv_group: Option<CString>,
 }
 
 /// A handle to a drawing surface (C `LedCanvas`), owned by the C matrix.

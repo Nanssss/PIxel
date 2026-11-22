@@ -139,7 +139,7 @@ impl App {
 }
 
 // =================================================================
-//    Static functions                                             |
+//    Helpers                                                      |
 // =================================================================
 
 /// Builds the states of the rotation, in display order: adding a state to the app
