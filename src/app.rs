@@ -93,7 +93,7 @@ impl App {
         // The network states start their background fetch task here
         let states = build_states(config, &context).await;
 
-        Ok(App {
+        Ok(Self {
             states,
             current: 0,
             last_shown: Instant::now(),

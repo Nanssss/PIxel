@@ -56,7 +56,7 @@ impl GoogleAuth {
                 .await
                 .context("failed to create InstalledFlowAuthenticator")?;
 
-        Ok(GoogleAuth { authenticator })
+        Ok(Self { authenticator })
     }
 
     /// Returns an access token valid for `scopes`, to be sent as a `Bearer` token.

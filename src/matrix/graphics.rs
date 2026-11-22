@@ -13,7 +13,7 @@ use super::wrapper::Canvas;
 /// Converts an `embedded-graphics` color into the C library `Color` struct.
 impl From<Rgb888> for Color {
     fn from(color: Rgb888) -> Self {
-        Color {
+        Self {
             r: color.r(),
             g: color.g(),
             b: color.b(),

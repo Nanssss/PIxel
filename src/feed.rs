@@ -94,7 +94,7 @@ impl<T> Feed<T> {
         let (tx, rx) = watch::channel(None);
         tokio::spawn(fetch_loop(fetcher, tx));
 
-        Feed {
+        Self {
             rx,
             max_age: F::MAX_AGE,
         }

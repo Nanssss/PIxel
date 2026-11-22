@@ -35,7 +35,7 @@ pub struct WeatherConfig {
 /// the coordinates below.
 impl Default for WeatherConfig {
     fn default() -> Self {
-        WeatherConfig {
+        Self {
             enabled: true,
             latitude: 43.57,
             longitude: 1.46,
@@ -82,15 +82,15 @@ impl Condition {
     #[rustfmt::skip]
     fn from_wmo(code: u8) -> Self {
         match code {
-            0 | 1               => Condition::Clear,        // clear, mainly clear
-            2                   => Condition::PartlyCloudy,
-            3                   => Condition::Overcast,
-            45 | 48             => Condition::Fog,          // fog, rime fog
-            51..=57             => Condition::Drizzle,      // light to dense, freezing
-            61..=67 | 80..=82   => Condition::Rain,         // slight to heavy, freezing | showers
-            71..=77 | 85 | 86   => Condition::Snow,         // slight to heavy, grains | showers
-            95..=99             => Condition::Thunderstorm, // with or without hail
-            _                   => Condition::Unknown,
+            0 | 1               => Self::Clear,        // clear, mainly clear
+            2                   => Self::PartlyCloudy,
+            3                   => Self::Overcast,
+            45 | 48             => Self::Fog,          // fog, rime fog
+            51..=57             => Self::Drizzle,      // light to dense, freezing
+            61..=67 | 80..=82   => Self::Rain,         // slight to heavy, freezing | showers
+            71..=77 | 85 | 86   => Self::Snow,         // slight to heavy, grains | showers
+            95..=99             => Self::Thunderstorm, // with or without hail
+            _                   => Self::Unknown,
         }
     }
 }
@@ -121,7 +121,7 @@ impl WeatherState {
             longitude: config.longitude,
         };
 
-        Some(WeatherState {
+        Some(Self {
             forecast: Feed::spawn(fetcher),
         })
     }
@@ -236,7 +236,7 @@ struct DailyData {
 /// Turns what the API sent into what the state displays.
 impl From<DailyData> for Forecast {
     fn from(daily: DailyData) -> Self {
-        Forecast {
+        Self {
             condition: Condition::from_wmo(daily.weather_code[0]),
             apparent_temperature_max: daily.apparent_temperature_max[0],
             apparent_temperature_min: daily.apparent_temperature_min[0],

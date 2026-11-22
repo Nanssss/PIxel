@@ -33,7 +33,7 @@ pub struct CalendarConfig {
 /// Values used when the section, or one of its fields, is missing: the calendar is shown.
 impl Default for CalendarConfig {
     fn default() -> Self {
-        CalendarConfig { enabled: true }
+        Self { enabled: true }
     }
 }
 
@@ -96,7 +96,7 @@ impl CalendarState {
             auth,
         };
 
-        Some(CalendarState {
+        Some(Self {
             events: Feed::spawn(fetcher),
         })
     }

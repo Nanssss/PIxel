@@ -904,12 +904,35 @@ Tells `cargo fmt` to keep an item as written: here, a `match` aligned like a tab
 
 ## Small idioms
 
+### `Self` inside an `impl`
+
+*In the code:* the constructors (`App::new`, `Feed::spawn`...), the `Default` impls,
+`Condition::from_wmo`
+
+Inside an `impl` block, `Self` is the type being implemented: write `Self { .. }`,
+`Self::Clear`, `Self::default` rather than repeating the type's name.
+
+```rust
+impl Condition {
+    fn from_wmo(code: u8) -> Self {
+        match code {
+            0 | 1 => Self::Clear, // rather than Condition::Clear
+            // ...
+```
+
+- Renaming the type only changes its `impl` lines, not every constructor and variant.
+- clippy can list the repetitions: `cargo clippy -- -W clippy::use_self`.
+
+One exception, on purpose: `OriginDimensions::size` for `Canvas` calls `Canvas::size(self)`,
+the inherent method (see [Same method name in a type and a trait](#same-method-name-in-a-type-and-a-trait)).
+`Self::size(self)` would call the same method, but would read like the function calling itself.
+
 ### `bool::then`
 
 *In the code:* `ClockState::new`, build.rs
 
 ```rust
-config.enabled.then(ClockState::default)  // true → Some(ClockState::default()), false → None
+config.enabled.then(Self::default)  // true → Some(Self::default()), false → None
 is_armv6.then_some("CPU_ARCH_FLAGS=...")  // same, with a value instead of a function
 ```
 
@@ -1115,3 +1138,5 @@ Run them on the PC with `cargo test`: no Pi needed.
 - **Errors**: `anyhow::Result` with `context`, messages in lowercase without a final period.
 - **Constructors**: `new`, returning `Self`, `Result<Self>` if it can fail, or `Option<Self>`
   for a state that can be turned off.
+- **`Self`**: inside an `impl`, rather than repeating the type's name (see
+  [`Self` inside an `impl`](#self-inside-an-impl)).

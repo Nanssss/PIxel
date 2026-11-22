@@ -37,7 +37,7 @@ pub struct ClockConfig {
 /// Values used when the section, or one of its fields, is missing: the clock is shown.
 impl Default for ClockConfig {
     fn default() -> Self {
-        ClockConfig { enabled: true }
+        Self { enabled: true }
     }
 }
 
@@ -61,7 +61,7 @@ pub struct ClockState {
 impl ClockState {
     /// Creates the clock, or returns `None` if it is turned off in the config.
     pub fn new(config: ClockConfig) -> Option<Self> {
-        config.enabled.then(ClockState::default)
+        config.enabled.then(Self::default)
     }
 }
 

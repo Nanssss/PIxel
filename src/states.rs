@@ -57,6 +57,6 @@ impl AppContext {
             .build()
             .context("failed to build the HTTP client")?;
 
-        Ok(AppContext { client })
+        Ok(Self { client })
     }
 }
