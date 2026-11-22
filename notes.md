@@ -886,10 +886,11 @@ contains no simulator code. Its dependencies are `optional`, and enabled by the 
 
 ### Compile-time macros: `env!`, `concat!`, `include!`
 
-*In the code:* `AppContext::new` (user agent), ffi.rs
+*In the code:* `AppContext::new` (user agent), `APP_NAME`, ffi.rs
 
 - `env!("CARGO_PKG_VERSION")` reads an environment variable while compiling (Cargo sets
-  the package name, version...).
+  the package name, version, binary name `CARGO_BIN_NAME`...): the name is written once,
+  in Cargo.toml.
 - `concat!` joins literals into a single `&'static str`: `"pixel/0.1.0"`.
 - `include!` pastes a file's content: ffi.rs includes the bindings written by bindgen in `OUT_DIR`.
 
@@ -990,8 +991,9 @@ and its fields in a single `assert!`.
 - **The console writes block**: the console layer writes to stdout right away, in the
   thread that logs (under systemd: to the journal). Usually fast, but it can wait: never
   log in `draw`. If needed, wrap stdout like the file: `tracing_appender::non_blocking(std::io::stdout())`.
-- **Line formats** (`fmt::format()`): full (default), `.compact()`, `.pretty()`, `.json()`
-  (needs the `json` feature).
+- **Line formats** (on `fmt::layer()`): full (default), `.compact()`, `.pretty()`, `.json()`
+  (needs the `json` feature). Both layers use the same chain: only the writer and the
+  colors differ.
 - **Never log a secret** (OAuth2 token, credentials).
 
 ---

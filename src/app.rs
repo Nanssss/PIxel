@@ -85,7 +85,7 @@ impl App {
         let matrix = Matrix::new().context("failed to init the LED matrix")?;
 
         let config = AppConfig::load_or_default();
-        info!("config:\n{config:?}");
+        info!("config:\n{config:#?}");
 
         // Only needed while the states are built: each task keeps its own client handle
         let context = AppContext::new()?;

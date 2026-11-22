@@ -9,7 +9,7 @@ use embedded_graphics::{pixelcolor::Rgb888, prelude::*};
 use reqwest::Client;
 use serde::Deserialize;
 use tokio::time::Duration;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info};
 
 use crate::feed::{Feed, Fetcher};
 use crate::google_auth::GoogleAuth;
@@ -175,7 +175,6 @@ impl Fetcher for TasksFetcher {
             .context("failed to deserialize GTASKS API response")?;
 
         let tasks = response.items;
-        trace!("Parsed Tasks: {:#?}", tasks);
         log_tasks(&tasks);
 
         Ok(tasks)

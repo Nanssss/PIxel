@@ -21,7 +21,7 @@ use tracing_subscriber::{
 use crate::paths::EXECUTABLE_DIR;
 
 /// Name of the app, used as the prefix of the log files
-const APP_NAME: &str = "PIxel";
+const APP_NAME: &str = env!("CARGO_BIN_NAME");
 /// Log directory, relative to the executable directory
 const LOG_DIR: &str = "logs";
 /// Number of daily log files kept, so the SD card never fills up
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
     let _log_guard = init_logging()?;
     log_panics();
 
-    info!("Starting PIxel...");
+    info!("Starting {APP_NAME}...");
     // Also logged, so that the error ends up in the log file
     app::run()
         .await
@@ -82,14 +82,11 @@ fn init_logging() -> Result<WorkerGuard> {
     // 3. File layer
     let file_layer = fmt::layer()
         .with_writer(non_blocking)
+        .with_thread_names(true)
+        .with_line_number(true)
+        .with_target(true)
         .with_ansi(false)
-        .event_format(
-            fmt::format()
-                .with_thread_names(true)
-                .with_target(true)
-                .with_line_number(true)
-                .compact(),
-        );
+        .compact();
 
     // 4. Filtering: `info` by default, overridden by `RUST_LOG` (e.g. `RUST_LOG=PIxel=debug`)
     let filter = EnvFilter::builder()
