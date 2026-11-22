@@ -338,8 +338,15 @@ compiling.
 *In the code:* `EXECUTABLE_DIR` (`expect`), build.rs, `log_panics`
 
 `expect("...")` is for what can't fail in practice, or where nothing can be done anyway
-(the executable's own path, the build script). The message says what was expected.
-Everything else returns an error.
+(the executable's own path, the build script). Everything else returns an error.
+
+The message says what *should* have been true, in lowercase: the style recommended by the
+std docs (`Result::expect`). The panic prints it before the error, so it reads naturally:
+
+```text
+thread 'main' (…) panicked at build.rs:62:10:
+make should be installed: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+```
 
 By default, Rust only prints a panic to stderr: the hook set by `log_panics` also logs it.
 
@@ -1159,6 +1166,9 @@ Run them on the PC with `cargo test`: no Pi needed.
 - **Formatting**: `cargo fmt` before committing (rules in `rustfmt.toml`).
 - **Lints**: `cargo clippy`. Its warnings in `bindings.rs` come from the generated code.
 - **Errors**: `anyhow::Result` with `context`, messages in lowercase without a final period.
+- **Panics**: `expect("... should ...")` in lowercase, saying what should have been true
+  (see [When to panic](#when-to-panic)).
+- **Logs**: a capital letter, no final period (no official Rust rule here: a project choice).
 - **Constructors**: `new`, returning `Self`, `Result<Self>` if it can fail, or `Option<Self>`
   for a state that can be turned off.
 - **`Self`**: inside an `impl`, rather than repeating the type's name (see

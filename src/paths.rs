@@ -16,9 +16,9 @@ use std::sync::LazyLock;
 /// (e.g. by systemd). Computed on first use.
 pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     std::env::current_exe()
-        .expect("Failed to get current executable path")
+        .expect("the executable's path should be readable")
         .parent()
-        .expect("Executable has no parent directory")
+        .expect("the executable should be in a directory")
         .to_path_buf()
 });
 

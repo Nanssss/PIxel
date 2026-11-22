@@ -29,7 +29,7 @@ fn main() {
     // objects. The submodule sources are only read.
     let build_dir = out_dir.join("rgbmatrix");
     // The compiler doesn't create directories: rp1/*.o objects need rp1/ to exist
-    std::fs::create_dir_all(build_dir.join("rp1")).expect("Failed to create rgbmatrix build dir");
+    std::fs::create_dir_all(build_dir.join("rp1")).expect("OUT_DIR should be writable");
 
     // LTO is disabled: the static lib must contain machine code, not GCC LTO bytecode
     // (which rust-lld can't read)
@@ -59,7 +59,7 @@ fn main() {
         .arg(format!("CXX={cxx}"))
         .args(is_armv6.then_some("CPU_ARCH_FLAGS=-march=armv6"))
         .status()
-        .expect("Failed to run make for rgbmatrix");
+        .expect("make should be installed");
     assert!(status.success(), "rgbmatrix make failed");
 
     // Link the static library, and the C++ standard library it needs
@@ -92,10 +92,10 @@ fn main() {
         .clang_arg(format!("-I{}", include_dir.display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
-        .expect("Unable to generate bindings");
+        .expect("bindgen should parse the C headers");
 
     // Written to OUT_DIR, and included by `src/matrix/ffi.rs`
     bindings
         .write_to_file(out_dir.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+        .expect("OUT_DIR should be writable");
 }
