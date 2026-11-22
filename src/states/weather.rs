@@ -48,10 +48,10 @@ impl Default for WeatherConfig {
 struct Forecast {
     /// Weather of the day: tells which icon to draw
     condition: Condition,
-    /// Maximum daily temperature, in °C
-    temp_max: f32,
-    /// Minimum daily temperature, in °C
-    temp_min: f32,
+    /// Maximum "feels like" (apparent) temperature of the day, in °C
+    feels_like_max: f32,
+    /// Minimum "feels like" (apparent) temperature of the day, in °C
+    feels_like_min: f32,
     /// Sum of the day's precipitation (rain, snow, hail), in mm
     precipitation_sum: f32,
 }
@@ -173,20 +173,17 @@ impl Fetcher for ForecastFetcher {
 
     /// Fetches the forecast of the day from the weather API
     async fn fetch(&mut self) -> Result<Forecast> {
-        let latitude = self.latitude.to_string();
-        let longitude = self.longitude.to_string();
-        let query_params = &[
-            ("latitude", latitude.as_str()),
-            ("longitude", longitude.as_str()),
-            ("daily", DAILY_VARIABLES),
-            ("timezone", "auto"), // the day starts at midnight, local time of the place
-            ("forecast_days", "1"), // today only
-        ];
-
         let response: WeatherResponse = self
             .client
             .get(WEATHER_API_URL)
-            .query(query_params)
+            // Two calls, each one appends its parameters: the items of an array must
+            // all have the same type (numbers here, text below)
+            .query(&[("latitude", self.latitude), ("longitude", self.longitude)])
+            .query(&[
+                ("daily", DAILY_VARIABLES),
+                ("timezone", "auto"), // the day starts at midnight, local time of the place
+                ("forecast_days", "1"), // today only
+            ])
             .send()
             .await
             .context("failed to send weather API request")?
@@ -201,8 +198,11 @@ impl Fetcher for ForecastFetcher {
         let forecast = Forecast::from(response.daily);
 
         info!(
-            "Forecast: {:?}, {}°C max, {}°C min, {} mm of precipitation",
-            forecast.condition, forecast.temp_max, forecast.temp_min, forecast.precipitation_sum
+            "Forecast: {:?}, feels like {}°C max, {}°C min, {} mm of precipitation",
+            forecast.condition,
+            forecast.feels_like_max,
+            forecast.feels_like_min,
+            forecast.precipitation_sum
         );
 
         Ok(forecast)
@@ -238,8 +238,8 @@ impl From<DailyData> for Forecast {
     fn from(daily: DailyData) -> Self {
         Forecast {
             condition: Condition::from_wmo(daily.weather_code[0]),
-            temp_max: daily.apparent_temperature_max[0],
-            temp_min: daily.apparent_temperature_min[0],
+            feels_like_max: daily.apparent_temperature_max[0],
+            feels_like_min: daily.apparent_temperature_min[0],
             precipitation_sum: daily.precipitation_sum[0],
         }
     }
@@ -273,8 +273,8 @@ mod tests {
         let forecast = Forecast::from(response.daily);
 
         assert_eq!(forecast.condition, Condition::Rain);
-        assert_eq!(forecast.temp_max, 4.5);
-        assert_eq!(forecast.temp_min, -3.6);
+        assert_eq!(forecast.feels_like_max, 4.5);
+        assert_eq!(forecast.feels_like_min, -3.6);
         assert_eq!(forecast.precipitation_sum, 0.0);
     }
 
