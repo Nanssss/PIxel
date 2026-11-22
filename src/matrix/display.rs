@@ -120,7 +120,7 @@ fn runtime_options() -> Result<RuntimeOptions> {
     if uid == 0 || gid == 0 {
         warn!("The app directory belongs to root: privileges are kept, the app runs as root");
         return Ok(RuntimeOptions {
-            drop_privileges: -1, // -1: disabled (0 would mean "library default": on)
+            drop_privileges: Some(false),
             ..Default::default()
         });
     }

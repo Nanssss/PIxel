@@ -48,7 +48,7 @@ pub struct MatrixOptions {
 pub struct RuntimeOptions {
     pub gpio_slowdown: i32,               // library default: 1 (2 on a Pi 4)
     pub rp1_pio: i32,                     // 0 = RP1 RIO, 1 = RP1 PIO (Pi 5 only)
-    pub drop_privileges: i32,             // -1 disabled, 0 off, 1 on (default)
+    pub drop_privileges: Option<bool>,    // None: library default (on)
     pub do_gpio_init: bool,               // library default: true
     pub drop_priv_user: Option<CString>,  // library default: "daemon"
     pub drop_priv_group: Option<CString>, // library default: "daemon"
@@ -206,7 +206,11 @@ impl RgbLedMatrix {
 
         rt_opts.gpio_slowdown = rt_options.gpio_slowdown;
         rt_opts.rp1_pio = rt_options.rp1_pio;
-        rt_opts.drop_privileges = rt_options.drop_privileges;
+        rt_opts.drop_privileges = match rt_options.drop_privileges {
+            None => 0,
+            Some(true) => 1,
+            Some(false) => -1,
+        };
         rt_opts.do_gpio_init = rt_options.do_gpio_init;
         rt_opts.drop_priv_user = opt_c_ptr(rt_options.drop_priv_user.as_deref());
         rt_opts.drop_priv_group = opt_c_ptr(rt_options.drop_priv_group.as_deref());
