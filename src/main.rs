@@ -27,7 +27,6 @@ const LOG_FILES_KEPT: usize = 7;
 // A 2nd worker keeps running the timers while the 1st one computes
 #[tokio::main(worker_threads = 2)]
 async fn main() -> Result<()> {
-    // Not `let _`: the guard must live until the end of `main`, to flush the last logs
     let _log_guard = init_logging()?;
     log_panics();
 
@@ -46,7 +45,6 @@ async fn main() -> Result<()> {
 /// # Errors
 /// If the log file can't be created, or a subscriber was already set.
 fn init_logging() -> Result<WorkerGuard> {
-    // 1. File appender: a new file each day, the oldest ones deleted
     let file_appender = rolling::RollingFileAppender::builder()
         .rotation(rolling::Rotation::DAILY)
         .filename_prefix(APP_NAME)
@@ -58,7 +56,6 @@ fn init_logging() -> Result<WorkerGuard> {
     // Written by a dedicated thread: logging never waits for the SD card
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-    // 2. Console layer (stdout)
     let console_layer = fmt::layer()
         .with_thread_names(true)
         .with_target(true)
@@ -67,7 +64,6 @@ fn init_logging() -> Result<WorkerGuard> {
         .with_ansi(std::io::stdout().is_terminal())
         .compact();
 
-    // 3. File layer
     let file_layer = fmt::layer()
         .with_writer(non_blocking)
         .with_thread_names(true)
@@ -76,12 +72,11 @@ fn init_logging() -> Result<WorkerGuard> {
         .with_ansi(false)
         .compact();
 
-    // 4. Filtering: `info` by default, overridden by `RUST_LOG` (e.g. `RUST_LOG=PIxel=debug`)
+    // `info` by default, overridden by `RUST_LOG` (e.g. `RUST_LOG=PIxel=debug`)
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy();
 
-    // 5. Combine the layers into a single subscriber
     tracing_subscriber::registry()
         .with(filter)
         .with(console_layer)

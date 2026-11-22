@@ -24,7 +24,7 @@ impl From<Rgb888> for Color {
 /// Size of the canvas. `Origin`: the drawable area starts at (0, 0).
 impl OriginDimensions for Canvas {
     fn size(&self) -> Size {
-        // The inherent `Canvas::size` (inherent methods win over trait methods), not this one
+        // The inherent `Canvas::size`, not this trait method
         let (width, height) = Canvas::size(self);
         Size::new(width as u32, height as u32)
     }
@@ -37,18 +37,13 @@ impl DrawTarget for Canvas {
     /// Drawing on the canvas can never fail.
     type Error = Infallible;
 
-    /// Draws every pixel yielded by the iterator.
     fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
     where
         I: IntoIterator<Item = Pixel<Self::Color>>,
     {
-        // Pixels can be off the screen (e.g. a shape partially off-screen): skip them
-        let bounds = self.bounding_box();
-
+        // Out-of-bounds pixels are ignored by the C library
         for Pixel(point, color) in pixels {
-            if bounds.contains(point) {
-                self.set_pixel(point.x, point.y, color.into());
-            }
+            self.set_pixel(point.x, point.y, color.into());
         }
 
         Ok(())

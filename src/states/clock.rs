@@ -16,10 +16,10 @@ use serde::Deserialize;
 use super::State;
 use crate::matrix::Matrix;
 
-// Drawing styles, built once at compile time
+// Drawing styles
 /// 1px red outline used for the panel border
 const BORDER_STYLE: PrimitiveStyle<Rgb888> = PrimitiveStyle::with_stroke(Rgb888::RED, 1);
-/// White 6x10 mono font for the time (font + color)
+/// Font and color of the time
 const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_6X10, Rgb888::WHITE);
 /// Text centered horizontally and vertically on its anchor point
 const CENTERED: TextStyle = TextStyleBuilder::new()
@@ -42,9 +42,6 @@ impl Default for ClockConfig {
 }
 
 /// Shows the current time, centered in a red border.
-///
-/// Unlike the other states, nothing is fetched in the background: the time is read
-/// from the system clock on every frame.
 // `Default`: an empty text, formatted on the first frame (`shown_at` 0 is never "now")
 #[derive(Default)]
 pub struct ClockState {

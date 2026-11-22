@@ -33,7 +33,7 @@ impl Matrix {
     /// # Errors
     /// If the C library fails to create the matrix (usually: not run as root).
     pub fn new() -> Result<Self> {
-        // This project's panel. Fields not listed keep the library defaults.
+        // This project's panel
         let options = MatrixOptions {
             // Small constants: `as` can't truncate them
             rows: PANEL_HEIGHT as i32,

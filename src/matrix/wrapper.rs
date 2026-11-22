@@ -170,7 +170,6 @@ impl Canvas {
     /// # Panics
     /// If `colors` doesn't hold exactly `width * height` colors.
     pub fn set_pixels(&mut self, x: i32, y: i32, width: i32, height: i32, colors: &[Color]) {
-        // Checked even in release builds: C would read out of `colors` otherwise
         assert_eq!(
             buffer_len(width, height, 1),
             Some(colors.len()),
@@ -340,8 +339,7 @@ impl Font {
         // Owned from here: if loading failed below, `drop` frees it
         let font = Self { ptr };
 
-        // C ignores load errors (it always returns a font): a font that couldn't be
-        // loaded is recognized by its height, which stays at -1
+        // C ignores load errors: a font that failed to load keeps its height of -1
         if font.height() < 0 {
             bail!("failed to load font from {}", path.display());
         }
@@ -354,11 +352,11 @@ impl Font {
     /// 1. draw it with the outline font at `x - 1`, with `kerning_offset - 2`
     ///    (its characters are 2 pixels wider),
     /// 2. draw it with this font at `x`, with `kerning_offset`, on top.
-    pub fn create_outline(&self) -> Font {
+    pub fn create_outline(&self) -> Self {
         // SAFETY: `ptr` is valid (see `Font`). C only reads it, and returns a new,
         // independent font, owned by the returned `Font` (freed by its `drop`).
         let ptr = unsafe { ffi::create_outline_font(self.ptr) };
-        Font { ptr }
+        Self { ptr }
     }
 
     /// Distance from the top of the font to its baseline, in pixels.
@@ -483,7 +481,7 @@ impl RgbLedMatrix {
             bail!("failed to create the RGB LED matrix (not running as root?)");
         }
 
-        // No string given to C++: the default options (no strings) are enough
+        // No string given to C++, so none to keep alive
         Ok(Self {
             ptr,
             options: MatrixOptions::default(),

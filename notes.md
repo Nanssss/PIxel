@@ -767,7 +767,7 @@ warns otherwise).
 *In the code:* `Canvas`, `Font`, `RgbLedMatrix`
 
 Each wrapper type states its *invariant*: `ptr` is never null, and only freed once, by
-`Drop`. The constructor checks it (`ptr.is_null()` → error), the private field keeps the
+`Drop`. The constructor ensures it (`ptr.is_null()` → error, when C can return null), the private field keeps the
 rest of the code from breaking it, and every `// SAFETY:` comment relies on it ("`ptr` is
 valid (see `Canvas`)").
 
@@ -1190,7 +1190,7 @@ Run them on the PC with `cargo test`: no Pi needed.
   (`// ===== App =====`), its impls (`// ===== impl WeatherState =====`) or a role
   (`// ===== Background task =====`). `mod tests` needs none: it is already a section.
 - **Formatting**: `cargo fmt` before committing (rules in `rustfmt.toml`).
-- **Lints**: `cargo clippy`. Its warnings in `bindings.rs` come from the generated code.
+- **Lints**: `cargo clippy`, with no warning left.
 - **Imports**: three groups (`std`, external crates, this crate), `super::` for the parent
   module and `crate::` for the others (see [Import paths](#import-paths-std-super-crate)).
 - **Errors**: `anyhow::Result` with `context`, messages in lowercase without a final period.

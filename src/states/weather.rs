@@ -146,8 +146,6 @@ impl State for WeatherState {
 // ===== Background task =====
 
 /// Fetches the forecast for the background task of the state.
-///
-/// Owns everything a fetch needs: the task outlives the function that starts it.
 struct ForecastFetcher {
     /// HTTP client shared with the other states
     client: Client,

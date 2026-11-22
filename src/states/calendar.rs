@@ -54,7 +54,6 @@ struct Event {
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 #[serde(untagged)]
 enum EventStart {
-    /// At a given time
     At {
         #[serde(rename = "dateTime")]
         time: DateTime<Local>,
@@ -121,8 +120,6 @@ impl State for CalendarState {
 // ===== Background task =====
 
 /// Fetches the events for the background task of the state.
-///
-/// Owns everything a fetch needs: the task outlives the function that starts it.
 struct EventsFetcher {
     /// HTTP client shared with the other states
     client: Client,
@@ -147,7 +144,6 @@ impl Fetcher for EventsFetcher {
 
     /// Fetches the next events from the calendar API
     async fn fetch(&mut self) -> Result<Vec<Event>> {
-        // From the cache, unless a new one is needed
         let token = self.auth.token(CALENDAR_SCOPES).await?;
 
         let query_params = &[

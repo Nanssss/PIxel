@@ -98,13 +98,10 @@ impl App {
         })
     }
 
-    /// Draws one frame: the current state, or a black screen if it has nothing to
-    /// display (its data just expired, or nothing is ready yet, e.g. no network).
+    /// Draws one frame of the current state.
     fn draw(&mut self) {
         // No `is_ready` check: a state with nothing to display draws nothing
         self.states[self.current].draw(&mut self.matrix);
-
-        // `show` clears the hidden buffer after each frame: each frame starts black
         self.matrix.show();
     }
 

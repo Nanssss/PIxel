@@ -28,7 +28,7 @@ pub trait State {
     /// Called on every frame of the current state, ready or not: a state with
     /// nothing to display draws nothing (the frame stays black).
     ///
-    /// Runs in the frame loop, 30 times per second: no waiting, no I/O, no decoding.
+    /// Runs in the frame loop: no waiting, no I/O, no decoding.
     /// Prepare data in the constructor or in the background `fetch` instead.
     /// `&mut self`: a state can keep what changes between frames (animation, cache...).
     fn draw(&mut self, matrix: &mut Matrix);
@@ -36,8 +36,7 @@ pub trait State {
 
 /// What the app shares with its states while it builds them.
 pub struct AppContext {
-    /// HTTP client shared by every state that needs the network. Cheap to clone:
-    /// the clones share the same connection pool.
+    /// HTTP client shared by every state that needs the network (cheap to clone).
     pub client: Client,
 }
 

@@ -42,8 +42,7 @@ pub trait Fetcher: Send + 'static {
     ///
     /// # Errors
     /// If the fetch failed: the task logs the error, and fetches again later.
-    // Implemented as `async fn fetch(&mut self) -> Result<Self::Data>`: spelled out
-    // here only to add `+ Send`, required by `tokio::spawn`
+    // Implemented as an `async fn`: spelled out only to add `+ Send` (needed by `tokio::spawn`)
     fn fetch(&mut self) -> impl Future<Output = Result<Self::Data>> + Send;
 }
 
@@ -78,7 +77,6 @@ impl<T> Feed<T> {
         F: Fetcher<Data = T>,
         T: Send + Sync + 'static,
     {
-        // Checked at compile time, for each fetcher type.
         // `as_nanos`: `Duration`s can't be compared in a `const` context yet.
         const {
             assert!(
