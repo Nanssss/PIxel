@@ -87,8 +87,13 @@ fn main() {
     // itself: nothing to configure for cross-compilation.
     let bindings = bindgen::Builder::default()
         .header(wrapper_path.to_str().unwrap())
-        // Only the matrix C API (and the types it uses), not everything its headers include
+        // Only the items declared in the matrix C API, not the ones of the headers it
+        // includes: its types are all its own, or primitives that bindgen maps (u8, usize...)
         .allowlist_file(".*led-matrix-c\\.h")
+        .allowlist_recursively(false)
+        // Not wrapped (see `wrapper.rs`). Its `FILE*` parameter needs glibc's `FILE`
+        // struct, no longer generated (see above): its bitfield code triggered clippy warnings
+        .blocklist_function("led_matrix_print_flags")
         .clang_arg(format!("-I{}", include_dir.display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
