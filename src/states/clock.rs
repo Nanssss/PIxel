@@ -29,7 +29,7 @@ const CENTERED: TextStyle = TextStyleBuilder::new()
 
 /// Config of the clock: the `[clock]` section of `config.toml`.
 #[derive(Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct ClockConfig {
     enabled: bool,
 }

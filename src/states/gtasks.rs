@@ -26,7 +26,7 @@ const GCALENDAR_SCOPES: &[&str] = &["https://www.googleapis.com/auth/calendar.ev
 
 /// Config of the Google tasks: the `[gtasks]` section of `config.toml`.
 #[derive(Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct GTasksConfig {
     enabled: bool,
 }

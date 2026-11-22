@@ -22,7 +22,7 @@ const DAILY_VARIABLES: &str =
 
 /// Config of the weather: the `[weather]` section of `config.toml`.
 #[derive(Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct WeatherConfig {
     enabled: bool,
     /// Place the forecast is fetched for, in decimal degrees (north is positive)

@@ -645,6 +645,36 @@ or a field with a default.
 - On a **field**: a missing field takes the default of its type (`String::new()`,
   `Vec::new()`).
 
+### `deny_unknown_fields`: typos in the config
+
+*In the code:* `AppConfig`, `ClockConfig`, `WeatherConfig`, `GTasksConfig`
+
+Two opposite choices, on purpose:
+
+- **API responses** ignore unknown fields: an API may add fields at any time, and that
+  must not break the app.
+- **The config** refuses them: with `#[serde(default)]` alone, a typo would be silently
+  ignored, and the field would keep its default value:
+
+  ```toml
+  [weather]
+  enabeld = false   # typo: the weather would stay on, without any message
+  ```
+
+With `#[serde(default, deny_unknown_fields)]`, the config fails to load, and the warning
+names the key and its line:
+
+```text
+No config loaded, using defaults: failed to deserialize .../in/config.toml:
+TOML parse error at line 5, column 1
+  |
+5 | enabeld = false
+  | ^^^^^^^
+unknown field `enabeld`, expected one of `enabled`, `latitude`, `longitude`
+```
+
+The same goes for an unknown section (`[calendar]`): it is checked on `AppConfig`.
+
 ### `rename`
 
 *In the code:* `GTask::title` (`"summary"`), `TaskStart::At` (`"dateTime"`)
@@ -1041,7 +1071,7 @@ A single 1 GHz ARMv6 core and 512 MB of RAM. At 30 fps, a frame has 33 ms.
 
 ## Tests
 
-*In the code:* the `tests` modules of weather.rs and gtasks.rs
+*In the code:* the `tests` modules of config.rs, weather.rs and gtasks.rs
 
 ```rust
 #[cfg(test)]      // compiled by `cargo test` only
@@ -1057,7 +1087,8 @@ mod tests {
 - Test names are sentences: a failing test reads as the broken rule.
 - Parsing is tested with real API responses (shortened), in raw strings `r#"..."#`: no
   need to escape the `"`.
-- Each edge case gets its own test: no day in the response, no `items`, a task without start.
+- Each edge case gets its own test: no day in the response, no `items`, a task without
+  start, a typo in the config.
 - A test must not depend on the machine: `tasks_are_read_from_the_api_response` compares
   instants, not local times.
 - `.unwrap()` is fine in tests: a panic is a failed test.

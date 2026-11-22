@@ -2,6 +2,9 @@
 //!
 //! Each state declares its own part of the config in its module (`ClockConfig`...):
 //! this file only gathers them, and knows how to load the whole.
+//!
+//! Every config struct refuses unknown keys (`deny_unknown_fields`): a typo such as
+//! `enabeld` is reported, instead of being silently ignored.
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -19,7 +22,7 @@ const CONFIG_FILE_PATH: &str = "in/config.toml";
 /// The whole config: one section per state (`[clock]`, `[weather]`...).
 /// A section missing from the file takes its default values.
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct AppConfig {
     pub clock: ClockConfig,
     pub weather: WeatherConfig,
@@ -47,5 +50,42 @@ impl AppConfig {
 
         toml::from_str(&content)
             .with_context(|| format!("failed to deserialize {}", config_file_path.display()))
+    }
+}
+
+// =================================================================
+//    Tests                                                        |
+// =================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_config_is_valid() {
+        // `enabled` and `longitude`: from `WeatherConfig::default()`, other sections too
+        let config = r#"
+            [weather]
+            latitude = 48.85
+        "#;
+        assert!(toml::from_str::<AppConfig>(config).is_ok());
+    }
+
+    #[test]
+    fn misspelled_field_is_refused() {
+        let config = r#"
+            [weather]
+            enabeld = false
+        "#;
+        assert!(toml::from_str::<AppConfig>(config).is_err());
+    }
+
+    #[test]
+    fn unknown_section_is_refused() {
+        let config = r#"
+            [calendar]
+            enabled = false
+        "#;
+        assert!(toml::from_str::<AppConfig>(config).is_err());
     }
 }
