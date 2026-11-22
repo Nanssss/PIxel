@@ -48,10 +48,10 @@ impl Default for WeatherConfig {
 struct Forecast {
     /// Weather of the day: tells which icon to draw
     condition: Condition,
-    /// Maximum "feels like" (apparent) temperature of the day, in °C
-    feels_like_max: f32,
-    /// Minimum "feels like" (apparent) temperature of the day, in °C
-    feels_like_min: f32,
+    /// Maximum apparent ("feels like") temperature of the day, in °C
+    apparent_temperature_max: f32,
+    /// Minimum apparent ("feels like") temperature of the day, in °C
+    apparent_temperature_min: f32,
     /// Sum of the day's precipitation (rain, snow, hail), in mm
     precipitation_sum: f32,
 }
@@ -198,10 +198,10 @@ impl Fetcher for ForecastFetcher {
         let forecast = Forecast::from(response.daily);
 
         info!(
-            "Forecast: {:?}, feels like {}°C max, {}°C min, {} mm of precipitation",
+            "Forecast: {:?}, apparent temperature {}°C max, {}°C min, {} mm of precipitation",
             forecast.condition,
-            forecast.feels_like_max,
-            forecast.feels_like_min,
+            forecast.apparent_temperature_max,
+            forecast.apparent_temperature_min,
             forecast.precipitation_sum
         );
 
@@ -238,8 +238,8 @@ impl From<DailyData> for Forecast {
     fn from(daily: DailyData) -> Self {
         Forecast {
             condition: Condition::from_wmo(daily.weather_code[0]),
-            feels_like_max: daily.apparent_temperature_max[0],
-            feels_like_min: daily.apparent_temperature_min[0],
+            apparent_temperature_max: daily.apparent_temperature_max[0],
+            apparent_temperature_min: daily.apparent_temperature_min[0],
             precipitation_sum: daily.precipitation_sum[0],
         }
     }
@@ -273,8 +273,8 @@ mod tests {
         let forecast = Forecast::from(response.daily);
 
         assert_eq!(forecast.condition, Condition::Rain);
-        assert_eq!(forecast.feels_like_max, 4.5);
-        assert_eq!(forecast.feels_like_min, -3.6);
+        assert_eq!(forecast.apparent_temperature_max, 4.5);
+        assert_eq!(forecast.apparent_temperature_min, -3.6);
         assert_eq!(forecast.precipitation_sum, 0.0);
     }
 
