@@ -3,13 +3,16 @@
 //! The only state that needs no network, so it is also the fallback when every
 //! other state is turned off (see `app.rs`).
 
+use std::time::{Duration, Instant};
+
 use chrono::Local;
 use embedded_graphics::{
     geometry::{AnchorX, AnchorY},
-    image::Image,
+    image::GetPixel,
     mono_font::{MonoTextStyle, ascii::FONT_5X8},
     pixelcolor::Rgb888,
     prelude::*,
+    primitives::Rectangle,
     text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
 };
 use serde::Deserialize;
@@ -18,12 +21,19 @@ use tinybmp::Bmp;
 use super::State;
 use crate::matrix::Matrix;
 
-/// The Earth, drawn on the left half
+/// One turn of the Earth, drawn on the left half
+/// The BPM image is W:32 x H:3840
 const EARTH: Bmp<'static, Rgb888> =
     match Bmp::from_slice(include_bytes!("../../assets/clock/earth.bmp")) {
         Ok(bmp) => bmp,
         Err(_) => panic!("assets/clock/earth.bmp should be a valid BMP image"),
     };
+/// Size of one frame of `EARTH`; the BPM is a vertical strip
+const EARTH_FRAME: Size = Size::new_equal(EARTH.as_raw().header().image_size.width);
+/// Number of frames in `EARTH`, knowing they are square
+const NB_EARTH_FRAMES: u32 = EARTH.as_raw().header().image_size.height / EARTH_FRAME.height;
+/// Time for one turn of the Earth
+const ROTATION_PERIOD: Duration = Duration::from_secs(10);
 
 /// Font and color of the time
 const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
@@ -51,8 +61,6 @@ impl Default for ClockConfig {
 }
 
 /// Shows the Earth on the left half of the panel, the time and date on the right half.
-// `Default`: empty texts, formatted on the first frame (`shown_minute` 0 is never "now")
-#[derive(Default)]
 pub struct ClockState {
     /// `HH:MM`, with a blinking colon
     time: String,
@@ -60,6 +68,21 @@ pub struct ClockState {
     date: String,
     /// Minute (since the Unix epoch)
     shown_minute: i64,
+    /// Start of the Earth's rotation
+    started: Instant,
+}
+
+/// Written by hand: `Instant` has no `Default`.
+impl Default for ClockState {
+    fn default() -> Self {
+        Self {
+            // Empty texts, formatted on the first frame (`shown_minute` 0 is never "now")
+            time: String::new(),
+            date: String::new(),
+            shown_minute: 0,
+            started: Instant::now(),
+        }
+    }
 }
 
 impl ClockState {
@@ -106,7 +129,23 @@ impl State for ClockState {
         let time_area = right.resized_height(half_height, AnchorY::Top);
         let date_area = right.resized_height(half_height, AnchorY::Bottom);
 
-        let Ok(()) = Image::with_center(&EARTH, left.center()).draw(matrix);
+        // Elapsed time (monotonic) rather than the time of day: no jump on an NTP sync
+        let turn = self
+            .started
+            .elapsed()
+            .div_duration_f64(ROTATION_PERIOD)
+            .fract();
+        let frame = (turn * f64::from(NB_EARTH_FRAMES)) as u32;
+        let source = Rectangle::new(
+            Point::new(0, (frame * EARTH_FRAME.height) as i32),
+            EARTH_FRAME,
+        );
+        // Reads only this frame: `sub_image` would decode the whole strip
+        let colors = source
+            .points()
+            .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
+        let target = Rectangle::with_center(left.center(), EARTH_FRAME);
+        let Ok(()) = matrix.fill_contiguous(&target, colors);
 
         let Ok(_) = Text::with_text_style(&self.time, time_area.center(), TIME_STYLE, CENTERED)
             .draw(matrix);

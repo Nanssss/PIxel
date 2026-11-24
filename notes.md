@@ -508,10 +508,11 @@ belongs to this crate.
 
 ### `Default`: derive it or write it
 
-*In the code:* `ClockState`, `AppConfig` (derived), `ClockConfig`, `WeatherConfig` (written)
+*In the code:* `AppConfig` (derived), `ClockConfig`, `WeatherConfig`, `ClockState` (written)
 
 `#[derive(Default)]` gives each field its own default (`0`, `false`, `String::new()`...).
-When another value is needed (`enabled: true`), implement `Default` by hand.
+When another value is needed (`enabled: true`), or a field has no `Default` (`Instant`,
+in `ClockState`), implement `Default` by hand.
 
 `..Default::default()` fills the fields that aren't listed:
 
@@ -615,6 +616,10 @@ The task owns the `Sender`, the `Feed` owns the `Receiver`:
 `Instant` is a monotonic clock: it never jumps, even when the system clock is set (the Pi
 has no battery-backed clock, and syncs with NTP after boot). Use it for durations and ages.
 Use the time of day (`chrono::Local::now()`) only to show it.
+
+The Earth's rotation is timed by an `Instant` too: the position in the current turn is
+`started.elapsed().div_duration_f64(ROTATION_PERIOD).fract()`, a number in `0.0..1.0`
+(`fract` drops the whole turns already made).
 
 ### Timeout and exponential backoff
 
@@ -878,7 +883,7 @@ then shares it.
 
 ### Images embedded in the binary: `include_bytes!` + `const fn`
 
-*In the code:* `EARTH` (clock.rs)
+*In the code:* `EARTH`, `EARTH_FRAME`, `EARTH_FRAMES` (clock.rs)
 
 `include_bytes!("path")` pastes a file into the binary as a `&'static [u8]` (path relative
 to the source file). Nothing to deploy with the app, and no file to read at runtime.
@@ -898,6 +903,14 @@ const EARTH: Bmp<'static, Rgb888> =
 `Bmp` only borrows the bytes, and decodes the pixels while drawing: cheap for a 24-bit BMP
 (3 bytes copied per pixel). The images are made by the scripts of `tools/` (Python, not in
 git), into `assets/`.
+
+An animation is a *strip*: its frames stacked in one image (the Earth: 120 frames of 32x32,
+one turn). The frame size and count are read from the BMP header, at compile time too
+(`as_raw().header()` is a `const fn`): the script stays the only place to change them.
+
+To draw one frame, `GetPixel::pixel` reads only its 1024 pixels. `sub_image` would be the
+obvious tool, but tinybmp implements it by decoding the whole strip, and clipping away all
+the other frames (120x more work).
 
 ### `#[cfg]` and Cargo features
 
@@ -1053,10 +1066,12 @@ s.map_or(std::ptr::null(), CStr::as_ptr) // None → null, Some(s) → s.as_ptr(
 
 ### `as` casts
 
-*In the code:* `Matrix::new` (`PANEL_HEIGHT as i32`), `OriginDimensions for Canvas` (`width as u32`)
+*In the code:* `Matrix::new` (`PANEL_HEIGHT as i32`), `OriginDimensions for Canvas` (`width as u32`),
+`ClockState::draw` (`f64` → `u32`)
 
 `as` never fails: a value that doesn't fit is silently truncated or wrapped
-(`300_i32 as u8` is `44`). Fine for small, known values. For anything else, use a checked
+(`300_i32 as u8` is `44`). A float is rounded toward zero, and clamped to the target's
+range (`2.9_f64 as u32` is `2`, `-1.0 as u32` is `0`). Fine for small, known values. For anything else, use a checked
 conversion: `u8::try_from(x)?`.
 
 ### `matches!`
@@ -1160,6 +1175,8 @@ A single 1 GHz ARMv6 core and 512 MB of RAM. At 30 fps, a frame has 33 ms.
 - **No allocation per frame when it can be avoided**: `ClockState` formats its text again
   only when the minute changes (once every 1800 frames).
 - **Styles are `const`**: built at compile time.
+- **Only the current frame of an animation is read**: 1024 pixels of the Earth strip, not
+  the whole strip (see [Images embedded in the binary](#images-embedded-in-the-binary-include_bytes--const-fn)).
 - **Shared data isn't copied**: `Feed::latest` returns an `Arc` clone.
 - **The network is in background tasks**, with a timeout.
 - **Late frames are skipped**, not drawn in a burst (`MissedTickBehavior::Skip`).
