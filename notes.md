@@ -851,10 +851,10 @@ impls only matter if the matrix ever moves into a spawned task.
 
 ### `const` values, built at compile time
 
-*In the code:* `FRAME_PERIOD`, `BORDER_STYLE`, `TIME_STYLE`, `CENTERED`, `PANEL_SIZE`
+*In the code:* `FRAME_PERIOD`, `TIME_STYLE`, `CENTERED`, `PANEL_SIZE`, `EARTH`
 
 A `const` is computed by the compiler, and costs nothing at runtime. It can only call
-`const fn`s: `Duration::from_nanos`, `PrimitiveStyle::with_stroke`,
+`const fn`s: `Duration::from_nanos`, `MonoTextStyle::new`,
 `TextStyleBuilder::new()...build()` are. The drawing styles are ready before the first frame.
 
 ### Compile-time checks: `const { assert!(...) }`
@@ -875,6 +875,29 @@ in a `const` context yet: the check compares `as_nanos()`, plain integers.
 A `static` is a single value for the whole program, normally built at compile time.
 `LazyLock` builds it at runtime instead, on first use (once, even with several threads),
 then shares it.
+
+### Images embedded in the binary: `include_bytes!` + `const fn`
+
+*In the code:* `EARTH` (clock.rs)
+
+`include_bytes!("path")` pastes a file into the binary as a `&'static [u8]` (path relative
+to the source file). Nothing to deploy with the app, and no file to read at runtime.
+
+`Bmp::from_slice` is a `const fn`, so the image is parsed by the compiler. `?` and
+`.unwrap()` aren't allowed in a `const` yet, hence the `match`, where `panic!` turns an
+invalid image into a build error:
+
+```rust
+const EARTH: Bmp<'static, Rgb888> =
+    match Bmp::from_slice(include_bytes!("../../assets/clock/earth.bmp")) {
+        Ok(bmp) => bmp,
+        Err(_) => panic!("assets/clock/earth.bmp should be a valid BMP image"),
+    };
+```
+
+`Bmp` only borrows the bytes, and decodes the pixels while drawing: cheap for a 24-bit BMP
+(3 bytes copied per pixel). The images are made by the scripts of `tools/` (Python, not in
+git), into `assets/`.
 
 ### `#[cfg]` and Cargo features
 
@@ -1135,7 +1158,7 @@ A single 1 GHz ARMv6 core and 512 MB of RAM. At 30 fps, a frame has 33 ms.
 - **Nothing slow in `draw`**: no I/O, no waiting, no decoding. Prepare the data in the
   constructor, or in the background `fetch`.
 - **No allocation per frame when it can be avoided**: `ClockState` formats its text again
-  only when the second changes (once every 30 frames).
+  only when the minute changes (once every 1800 frames).
 - **Styles are `const`**: built at compile time.
 - **Shared data isn't copied**: `Feed::latest` returns an `Arc` clone.
 - **The network is in background tasks**, with a timeout.

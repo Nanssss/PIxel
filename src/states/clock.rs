@@ -1,26 +1,35 @@
-//! The clock state: shows the current time, read from the system clock.
+//! The clock state: the time and date from the system clock, next to the Earth.
 //!
 //! The only state that needs no network, so it is also the fallback when every
 //! other state is turned off (see `app.rs`).
 
 use chrono::Local;
 use embedded_graphics::{
-    mono_font::{MonoTextStyle, ascii::FONT_6X10},
+    geometry::{AnchorX, AnchorY},
+    image::Image,
+    mono_font::{MonoTextStyle, ascii::FONT_5X8},
     pixelcolor::Rgb888,
     prelude::*,
-    primitives::PrimitiveStyle,
     text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
 };
 use serde::Deserialize;
+use tinybmp::Bmp;
 
 use super::State;
 use crate::matrix::Matrix;
 
-// Drawing styles
-/// 1px red outline used for the panel border
-const BORDER_STYLE: PrimitiveStyle<Rgb888> = PrimitiveStyle::with_stroke(Rgb888::RED, 1);
+/// The Earth, drawn on the left half
+const EARTH: Bmp<'static, Rgb888> =
+    match Bmp::from_slice(include_bytes!("../../assets/clock/earth.bmp")) {
+        Ok(bmp) => bmp,
+        Err(_) => panic!("assets/clock/earth.bmp should be a valid BMP image"),
+    };
+
 /// Font and color of the time
-const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_6X10, Rgb888::WHITE);
+const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
+/// Font and color of the date
+const DATE_STYLE: MonoTextStyle<'static, Rgb888> =
+    MonoTextStyle::new(&FONT_5X8, Rgb888::CSS_ORANGE);
 /// Text centered horizontally and vertically on its anchor point
 const CENTERED: TextStyle = TextStyleBuilder::new()
     .alignment(Alignment::Center)
@@ -41,14 +50,16 @@ impl Default for ClockConfig {
     }
 }
 
-/// Shows the current time, centered in a red border.
-// `Default`: an empty text, formatted on the first frame (`shown_at` 0 is never "now")
+/// Shows the Earth on the left half of the panel, the time and date on the right half.
+// `Default`: empty texts, formatted on the first frame (`shown_minute` 0 is never "now")
 #[derive(Default)]
 pub struct ClockState {
-    /// Time on screen (`HH:MM:SS`), only formatted again when the second changes
-    text: String,
-    /// Unix timestamp (in seconds) `text` was formatted for
-    shown_at: i64,
+    /// `HH:MM`, with a blinking colon
+    time: String,
+    /// `DD MON`, e.g. `24 NOV`
+    date: String,
+    /// Minute (since the Unix epoch)
+    shown_minute: i64,
 }
 
 impl ClockState {
@@ -64,22 +75,43 @@ impl State for ClockState {
         true
     }
 
-    /// Draws the border, then the time (`HH:MM:SS`) in the middle of the panel.
+    /// Draws the Earth on the left half, the time above the date on the right half.
     fn draw(&mut self, matrix: &mut Matrix) {
         // Reading the system clock is local and cheap: fine on every frame
         let now = Local::now();
 
-        // Whole timestamp rather than `second()`: stays right if the clock jumps (NTP sync)
-        if now.timestamp() != self.shown_at {
-            self.text = now.format("%H:%M:%S").to_string();
-            self.shown_at = now.timestamp();
+        // Unix minute rather than `minute()`: right even if the clock jumps
+        let minute = now.timestamp() / 60;
+        if minute != self.shown_minute {
+            self.time = now.format("%H:%M").to_string();
+            self.date = now.format("%d %b").to_string().to_uppercase();
+            self.shown_minute = minute;
         }
 
+        // Blinking colon: shows the clock is running
+        let colon = if now.timestamp_subsec_millis() < 500 {
+            ":"
+        } else {
+            " "
+        };
+        // Same length swap (the colon of `HH:MM` is at index 2): no allocation
+        self.time.replace_range(2..3, colon);
+
         let screen = matrix.bounding_box();
+        let half_width = screen.size.width / 2;
+        let left = screen.resized_width(half_width, AnchorX::Left);
+        let right = screen.resized_width(half_width, AnchorX::Right);
 
-        let Ok(()) = screen.into_styled(BORDER_STYLE).draw(matrix);
+        let half_height = right.size.height / 2;
+        let time_area = right.resized_height(half_height, AnchorY::Top);
+        let date_area = right.resized_height(half_height, AnchorY::Bottom);
 
-        let Ok(_) =
-            Text::with_text_style(&self.text, screen.center(), TIME_STYLE, CENTERED).draw(matrix);
+        let Ok(()) = Image::with_center(&EARTH, left.center()).draw(matrix);
+
+        let Ok(_) = Text::with_text_style(&self.time, time_area.center(), TIME_STYLE, CENTERED)
+            .draw(matrix);
+
+        let Ok(_) = Text::with_text_style(&self.date, date_area.center(), DATE_STYLE, CENTERED)
+            .draw(matrix);
     }
 }

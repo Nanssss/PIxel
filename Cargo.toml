@@ -22,6 +22,7 @@ libc = { version = "0.2", optional = true }
 # HTTPS with rustls, like yup-oauth2: a single TLS stack, no OpenSSL to cross-compile
 reqwest = { version = "0.12.14", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 serde = { version = "1.0.219", features = ["derive"] }
+tinybmp = "0.7.0"
 tokio = { version = "1.44.1", features = ["full"] }
 toml = "1.1.4"
 tracing = "0.1.41"

@@ -40,6 +40,8 @@ impl Matrix {
             cols: PANEL_WIDTH as i32,
             brightness: 100,
             hardware_mapping: Some(c"adafruit-hat".to_owned()),
+            // The panel is mounted upside down
+            pixel_mapper_config: Some(c"Rotate:180".to_owned()),
             ..Default::default()
         };
 

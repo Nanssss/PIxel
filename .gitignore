@@ -16,3 +16,6 @@ log/
 # Ignore the Google OAuth2 secret and token cache
 credentials.json
 tokencache.json
+
+# Ignore the asset generators (Python scripts and their data)
+tools/

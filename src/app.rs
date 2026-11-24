@@ -20,7 +20,7 @@ const FRAME_RATE: u64 = 30;
 const FRAME_PERIOD: Duration = Duration::from_nanos(1_000_000_000 / FRAME_RATE);
 
 /// How long each state stays on screen
-const DISPLAY_TIME: Duration = Duration::from_secs(2);
+const DISPLAY_TIME: Duration = Duration::from_secs(5);
 
 // ===== Frame loop =====
 
