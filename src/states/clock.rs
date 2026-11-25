@@ -40,14 +40,11 @@ const _: () = assert!(
 /// Time for one loop of `EARTH`
 const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(20);
 
-/// Black box behind a text
-const BOX_STYLE: PrimitiveStyle<Rgb888> = PrimitiveStyle::with_fill(Rgb888::BLACK);
-
 /// Font and color of the time
 const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
 /// Font and color of the date
 const DATE_STYLE: MonoTextStyle<'static, Rgb888> =
-    MonoTextStyle::new(&FONT_5X8, Rgb888::CSS_ORANGE);
+    MonoTextStyle::new(&FONT_5X8, Rgb888::CSS_DARK_MAGENTA);
 /// Text centered horizontally and vertically on its anchor point
 const CENTERED: TextStyle = TextStyleBuilder::new()
     .alignment(Alignment::Center)
@@ -71,7 +68,7 @@ impl Default for ClockConfig {
 pub struct ClockState {
     /// `HH:MM`, with a blinking colon
     time: String,
-    /// `DD MON`, e.g. `24 NOV`
+    /// `DD mon`
     date: String,
     /// Minute (since the Unix epoch)
     shown_minute: i64,
@@ -114,7 +111,7 @@ impl State for ClockState {
         let minute = now.timestamp() / 60;
         if minute != self.shown_minute {
             self.time = now.format("%H:%M").to_string();
-            self.date = now.format("%d %b").to_string().to_uppercase();
+            self.date = now.format("%d %b").to_string().to_lowercase();
             self.shown_minute = minute;
         }
 
@@ -153,9 +150,6 @@ impl State for ClockState {
         let time = Text::with_text_style(&self.time, time_area.center(), TIME_STYLE, CENTERED);
         let date = Text::with_text_style(&self.date, date_area.center(), DATE_STYLE, CENTERED);
         for text in [&time, &date] {
-            // Same box with or without the colon: the font is monospace
-            let text_box = text.bounding_box().offset(1);
-            let Ok(()) = text_box.into_styled(BOX_STYLE).draw(matrix);
             let Ok(_) = text.draw(matrix);
         }
     }
