@@ -617,9 +617,9 @@ The task owns the `Sender`, the `Feed` owns the `Receiver`:
 has no battery-backed clock, and syncs with NTP after boot). Use it for durations and ages.
 Use the time of day (`chrono::Local::now()`) only to show it.
 
-The Earth's rotation is timed by an `Instant` too: the position in the current turn is
-`started.elapsed().div_duration_f64(ROTATION_PERIOD).fract()`, a number in `0.0..1.0`
-(`fract` drops the whole turns already made).
+The clock's animation is timed by an `Instant` too: the position in the current loop is
+`started.elapsed().div_duration_f64(EARTH_LOOP_PERIOD).fract()`, a number in `0.0..1.0`
+(`fract` drops the whole loops already made).
 
 ### Timeout and exponential backoff
 
@@ -856,7 +856,7 @@ impls only matter if the matrix ever moves into a spawned task.
 
 ### `const` values, built at compile time
 
-*In the code:* `FRAME_PERIOD`, `TIME_STYLE`, `CENTERED`, `PANEL_SIZE`, `EARTH`
+*In the code:* `FRAME_PERIOD`, `TIME_STYLE`, `CENTERED`, `BOX_STYLE`, `PANEL_SIZE`, `EARTH`
 
 A `const` is computed by the compiler, and costs nothing at runtime. It can only call
 `const fn`s: `Duration::from_nanos`, `MonoTextStyle::new`,
@@ -864,11 +864,18 @@ A `const` is computed by the compiler, and costs nothing at runtime. It can only
 
 ### Compile-time checks: `const { assert!(...) }`
 
-*In the code:* `Feed::spawn`
+*In the code:* `Feed::spawn`, clock.rs (after `NB_EARTH_FRAMES`)
 
 A `const` block in a generic function is evaluated at compile time, for each type the
 function is used with: a fetcher whose `MAX_AGE` isn't longer than its `REFRESH_PERIOD`
 doesn't build.
+
+Outside of a function, the same check is a `const` with no name (`_`) and no value (`()`):
+an `EARTH` image that isn't a strip of panel-sized frames doesn't build.
+
+```rust
+const _: () = assert!(condition, "message");
+```
 
 The `>` of `Duration` comes from a trait (`PartialOrd`), and trait methods can't be called
 in a `const` context yet: the check compares `as_nanos()`, plain integers.
@@ -883,7 +890,7 @@ then shares it.
 
 ### Images embedded in the binary: `include_bytes!` + `const fn`
 
-*In the code:* `EARTH`, `EARTH_FRAME`, `EARTH_FRAMES` (clock.rs)
+*In the code:* `EARTH`, `NB_EARTH_FRAMES`, `ClockState::draw` (clock.rs), `PANEL_SIZE`
 
 `include_bytes!("path")` pastes a file into the binary as a `&'static [u8]` (path relative
 to the source file). Nothing to deploy with the app, and no file to read at runtime.
@@ -904,13 +911,18 @@ const EARTH: Bmp<'static, Rgb888> =
 (3 bytes copied per pixel). The images are made by the scripts of `tools/` (Python, not in
 git), into `assets/`.
 
-An animation is a *strip*: its frames stacked in one image (the Earth: 120 frames of 32x32,
-one turn). The frame size and count are read from the BMP header, at compile time too
-(`as_raw().header()` is a `const fn`): the script stays the only place to change them.
+An animation is a *strip*: its frames stacked in one image. The clock's `EARTH`: 240
+frames of 64x32 (the whole panel), one loop = one Moon orbit = two Earth turns, made by
+`tools/earth.py`. The number of frames is the image's height divided by the panel's, at
+compile time: `as_raw().header()` is a `const fn`, and the panel's size is the `PANEL_SIZE`
+const of matrix.rs. The script stays the only place to change it.
 
-To draw one frame, `GetPixel::pixel` reads only its 1024 pixels. `sub_image` would be the
+To draw one frame, `GetPixel::pixel` reads only its 2048 pixels. `sub_image` would be the
 obvious tool, but tinybmp implements it by decoding the whole strip, and clipping away all
-the other frames (120x more work).
+the other frames (240x more work).
+
+Size: 6 KB per frame at 24 bits, 1.4 MB for `EARTH`. If it ever matters, a 256-color BMP
+(8 bits, read by tinybmp too) would divide it by 3.
 
 ### `#[cfg]` and Cargo features
 
@@ -1175,8 +1187,8 @@ A single 1 GHz ARMv6 core and 512 MB of RAM. At 30 fps, a frame has 33 ms.
 - **No allocation per frame when it can be avoided**: `ClockState` formats its text again
   only when the minute changes (once every 1800 frames).
 - **Styles are `const`**: built at compile time.
-- **Only the current frame of an animation is read**: 1024 pixels of the Earth strip, not
-  the whole strip (see [Images embedded in the binary](#images-embedded-in-the-binary-include_bytes--const-fn)).
+- **Only the current frame of an animation is read**: 2048 pixels of the `EARTH` strip,
+  not the whole strip (see [Images embedded in the binary](#images-embedded-in-the-binary-include_bytes--const-fn)).
 - **Shared data isn't copied**: `Feed::latest` returns an `Arc` clone.
 - **The network is in background tasks**, with a timeout.
 - **Late frames are skipped**, not drawn in a burst (`MissedTickBehavior::Skip`).

@@ -6,8 +6,11 @@
 //! - `simulator`: the same `Matrix` shown in a window on the PC, replaces `display`
 //!   when built with `--features simulator`.
 //!
-//! The app only needs `use crate::matrix::Matrix;`, and draws on it with
-//! `embedded-graphics` (colors are `Rgb888`). The C library's types never leave this module.
+//! The app only needs `use crate::matrix::Matrix;` (and `PANEL_SIZE` in a `const`), and draws
+//! on it with `embedded-graphics` (colors are `Rgb888`). The C library's types never leave
+//! this module.
+
+use embedded_graphics::geometry::Size;
 
 mod ffi;
 mod graphics;
@@ -28,3 +31,5 @@ pub use simulator::Matrix;
 const PANEL_WIDTH: u32 = 64;
 /// Height of the panel, in pixels
 const PANEL_HEIGHT: u32 = 32;
+/// Size of the panel
+pub const PANEL_SIZE: Size = Size::new(PANEL_WIDTH, PANEL_HEIGHT);

@@ -1,4 +1,5 @@
-//! The clock state: the time and date from the system clock, next to the Earth.
+//! The clock state: the time and date from the system clock, over an animation of the
+//! Earth, the Moon and the Sun.
 //!
 //! The only state that needs no network, so it is also the fallback when every
 //! other state is turned off (see `app.rs`).
@@ -12,28 +13,35 @@ use embedded_graphics::{
     mono_font::{MonoTextStyle, ascii::FONT_5X8},
     pixelcolor::Rgb888,
     prelude::*,
-    primitives::Rectangle,
+    primitives::{PrimitiveStyle, Rectangle},
     text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
 };
 use serde::Deserialize;
 use tinybmp::Bmp;
 
 use super::State;
-use crate::matrix::Matrix;
+use crate::matrix::{Matrix, PANEL_SIZE};
 
-/// One turn of the Earth, drawn on the left half
-/// The BPM image is W:32 x H:3840
+/// The animation behind the texts
+/// Frames the size of the panel, stacked vertically: the BMP image is W:64 x H:7680
 const EARTH: Bmp<'static, Rgb888> =
     match Bmp::from_slice(include_bytes!("../../assets/clock/earth.bmp")) {
         Ok(bmp) => bmp,
         Err(_) => panic!("assets/clock/earth.bmp should be a valid BMP image"),
     };
-/// Size of one frame of `EARTH`; the BPM is a vertical strip
-const EARTH_FRAME: Size = Size::new_equal(EARTH.as_raw().header().image_size.width);
-/// Number of frames in `EARTH`, knowing they are square
-const NB_EARTH_FRAMES: u32 = EARTH.as_raw().header().image_size.height / EARTH_FRAME.height;
-/// Time for one turn of the Earth
-const ROTATION_PERIOD: Duration = Duration::from_secs(10);
+/// Number of frames in `EARTH`
+const NB_EARTH_FRAMES: u32 = EARTH.as_raw().header().image_size.height / PANEL_SIZE.height;
+// A wrong image size fails the build, instead of drawing garbage
+const _: () = assert!(
+    EARTH.as_raw().header().image_size.width == PANEL_SIZE.width
+        && EARTH.as_raw().header().image_size.height % PANEL_SIZE.height == 0,
+    "earth.bmp should be a strip of panel-sized frames"
+);
+/// Time for one loop of `EARTH`
+const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(20);
+
+/// Black box behind a text
+const BOX_STYLE: PrimitiveStyle<Rgb888> = PrimitiveStyle::with_fill(Rgb888::BLACK);
 
 /// Font and color of the time
 const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
@@ -60,7 +68,6 @@ impl Default for ClockConfig {
     }
 }
 
-/// Shows the Earth on the left half of the panel, the time and date on the right half.
 pub struct ClockState {
     /// `HH:MM`, with a blinking colon
     time: String,
@@ -68,7 +75,7 @@ pub struct ClockState {
     date: String,
     /// Minute (since the Unix epoch)
     shown_minute: i64,
-    /// Start of the Earth's rotation
+    /// Start of the animation
     started: Instant,
 }
 
@@ -98,7 +105,7 @@ impl State for ClockState {
         true
     }
 
-    /// Draws the Earth on the left half, the time above the date on the right half.
+    /// Draws animation + text
     fn draw(&mut self, matrix: &mut Matrix) {
         // Reading the system clock is local and cheap: fine on every frame
         let now = Local::now();
@@ -121,36 +128,35 @@ impl State for ClockState {
         self.time.replace_range(2..3, colon);
 
         let screen = matrix.bounding_box();
-        let half_width = screen.size.width / 2;
-        let left = screen.resized_width(half_width, AnchorX::Left);
-        let right = screen.resized_width(half_width, AnchorX::Right);
-
+        let right = screen.resized_width(screen.size.width / 2, AnchorX::Right);
         let half_height = right.size.height / 2;
         let time_area = right.resized_height(half_height, AnchorY::Top);
         let date_area = right.resized_height(half_height, AnchorY::Bottom);
 
         // Elapsed time (monotonic) rather than the time of day: no jump on an NTP sync
-        let turn = self
+        let progress = self
             .started
             .elapsed()
-            .div_duration_f64(ROTATION_PERIOD)
+            .div_duration_f64(EARTH_LOOP_PERIOD)
             .fract();
-        let frame = (turn * f64::from(NB_EARTH_FRAMES)) as u32;
+        let frame = (progress * f64::from(NB_EARTH_FRAMES)) as u32;
         let source = Rectangle::new(
-            Point::new(0, (frame * EARTH_FRAME.height) as i32),
-            EARTH_FRAME,
+            Point::new(0, (frame * PANEL_SIZE.height) as i32),
+            PANEL_SIZE,
         );
         // Reads only this frame: `sub_image` would decode the whole strip
         let colors = source
             .points()
             .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
-        let target = Rectangle::with_center(left.center(), EARTH_FRAME);
-        let Ok(()) = matrix.fill_contiguous(&target, colors);
+        let Ok(()) = matrix.fill_contiguous(&screen, colors);
 
-        let Ok(_) = Text::with_text_style(&self.time, time_area.center(), TIME_STYLE, CENTERED)
-            .draw(matrix);
-
-        let Ok(_) = Text::with_text_style(&self.date, date_area.center(), DATE_STYLE, CENTERED)
-            .draw(matrix);
+        let time = Text::with_text_style(&self.time, time_area.center(), TIME_STYLE, CENTERED);
+        let date = Text::with_text_style(&self.date, date_area.center(), DATE_STYLE, CENTERED);
+        for text in [&time, &date] {
+            // Same box with or without the colon: the font is monospace
+            let text_box = text.bounding_box().offset(1);
+            let Ok(()) = text_box.into_styled(BOX_STYLE).draw(matrix);
+            let Ok(_) = text.draw(matrix);
+        }
     }
 }

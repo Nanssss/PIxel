@@ -15,10 +15,7 @@ use embedded_graphics_simulator::{
 };
 use tracing::info;
 
-use super::{PANEL_HEIGHT, PANEL_WIDTH};
-
-/// Same size as the real panel.
-const PANEL_SIZE: Size = Size::new(PANEL_WIDTH, PANEL_HEIGHT);
+use super::PANEL_SIZE;
 
 /// The simulated LED matrix: draw on it, then [`Matrix::show`] the frame.
 pub struct Matrix {
