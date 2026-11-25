@@ -13,11 +13,11 @@ use embedded_graphics::{
     pixelcolor::Rgb888,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
-    text::{Alignment, Baseline, Text, TextStyle, TextStyleBuilder},
+    text::{Alignment, Baseline, Text, renderer::TextRenderer},
 };
 use serde::Deserialize;
 use tinybmp::Bmp;
-use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_spleen5x8_mr};
+use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_squeezed_b6_tr};
 
 use super::State;
 use crate::matrix::{Matrix, PANEL_SIZE};
@@ -40,17 +40,14 @@ const _: () = assert!(
 /// Time for one loop of `EARTH`
 const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(20);
 
-/// Font and color of the time. Spleen 5x8: monospace (the blinking colon and the
-/// digits never shift the text), ASCII only
-const TIME_STYLE: U8g2TextStyle<Rgb888> = U8g2TextStyle::new(u8g2_font_spleen5x8_mr, Rgb888::WHITE);
+/// Font and color of the time. Squeezed bold 6: proportional, ASCII only. The colon is
+/// as wide as a space (the blink doesn't shift the text), but not all digits are equal
+/// (the time can move by 1 px when the minute changes)
+const TIME_STYLE: U8g2TextStyle<Rgb888> =
+    U8g2TextStyle::new(u8g2_font_squeezed_b6_tr, Rgb888::WHITE);
 /// Font and color of the date
 const DATE_STYLE: U8g2TextStyle<Rgb888> =
-    U8g2TextStyle::new(u8g2_font_spleen5x8_mr, Rgb888::CSS_DARK_MAGENTA);
-/// Text centered horizontally and vertically on its anchor point
-const CENTERED: TextStyle = TextStyleBuilder::new()
-    .alignment(Alignment::Center)
-    .baseline(Baseline::Middle)
-    .build();
+    U8g2TextStyle::new(u8g2_font_squeezed_b6_tr, Rgb888::CSS_DARK_MAGENTA);
 
 /// Config of the clock: the `[clock]` section of `config.toml`.
 #[derive(Debug, Deserialize)]
@@ -148,10 +145,20 @@ impl State for ClockState {
             .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
         let Ok(()) = matrix.fill_contiguous(&screen, colors);
 
-        let time = Text::with_text_style(&self.time, time_area.center(), TIME_STYLE, CENTERED);
-        let date = Text::with_text_style(&self.date, date_area.center(), DATE_STYLE, CENTERED);
-        for text in [&time, &date] {
-            let Ok(_) = text.draw(matrix);
-        }
+        draw_centered(matrix, &self.time, time_area, TIME_STYLE);
+        draw_centered(matrix, &self.date, date_area, DATE_STYLE);
     }
+}
+
+/// Draws `text` centered in `area`: horizontally on its width, vertically on its digits.
+///
+/// Not `Baseline::Middle`: with a u8g2 font, it centers the font's whole height, with
+/// the room for the letters going below the line (g, p), so the text sat too high.
+fn draw_centered(matrix: &mut Matrix, text: &str, area: Rectangle, style: U8g2TextStyle<Rgb888>) {
+    // The pixels of a digit, around a baseline at y = 0 (above it: negative y)
+    let digit = style
+        .measure_string("0", Point::zero(), Baseline::Alphabetic)
+        .bounding_box;
+    let baseline = Point::new(area.center().x, area.center().y - digit.center().y);
+    let Ok(_) = Text::with_alignment(text, baseline, style, Alignment::Center).draw(matrix);
 }
