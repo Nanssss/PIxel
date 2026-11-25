@@ -13,11 +13,11 @@ use embedded_graphics::{
     pixelcolor::Rgb888,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
-    text::{Alignment, Baseline, Text, renderer::TextRenderer},
+    text::{Baseline, Text, renderer::TextRenderer},
 };
 use serde::Deserialize;
 use tinybmp::Bmp;
-use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_squeezed_b6_tr};
+use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_04b_03b_tr};
 
 use super::State;
 use crate::matrix::{Matrix, PANEL_SIZE};
@@ -40,14 +40,12 @@ const _: () = assert!(
 /// Time for one loop of `EARTH`
 const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(20);
 
-/// Font and color of the time. Squeezed bold 6: proportional, ASCII only. The colon is
-/// as wide as a space (the blink doesn't shift the text), but not all digits are equal
-/// (the time can move by 1 px when the minute changes)
-const TIME_STYLE: U8g2TextStyle<Rgb888> =
-    U8g2TextStyle::new(u8g2_font_squeezed_b6_tr, Rgb888::WHITE);
+/// Font and color of the time. 04b_03b: 6 px high, proportional, ASCII only. Not all
+/// digits are equal: the time can move by 1 px when the minute changes
+const TIME_STYLE: U8g2TextStyle<Rgb888> = U8g2TextStyle::new(u8g2_font_04b_03b_tr, Rgb888::WHITE);
 /// Font and color of the date
 const DATE_STYLE: U8g2TextStyle<Rgb888> =
-    U8g2TextStyle::new(u8g2_font_squeezed_b6_tr, Rgb888::CSS_DARK_MAGENTA);
+    U8g2TextStyle::new(u8g2_font_04b_03b_tr, Rgb888::CSS_DARK_MAGENTA);
 
 /// Config of the clock: the `[clock]` section of `config.toml`.
 #[derive(Debug, Deserialize)]
@@ -64,7 +62,7 @@ impl Default for ClockConfig {
 }
 
 pub struct ClockState {
-    /// `HH:MM`, with a blinking colon
+    /// `HH:MM` (the colon blinks when drawn, see `draw_time`)
     time: String,
     /// `DD mon`
     date: String,
@@ -113,15 +111,6 @@ impl State for ClockState {
             self.shown_minute = minute;
         }
 
-        // Blinking colon: shows the clock is running
-        let colon = if now.timestamp_subsec_millis() < 500 {
-            ":"
-        } else {
-            " "
-        };
-        // Same length swap (the colon of `HH:MM` is at index 2): no allocation
-        self.time.replace_range(2..3, colon);
-
         let screen = matrix.bounding_box();
         let right = screen.resized_width(screen.size.width / 2, AnchorX::Right);
         let half_height = right.size.height / 2;
@@ -145,20 +134,48 @@ impl State for ClockState {
             .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
         let Ok(()) = matrix.fill_contiguous(&screen, colors);
 
-        draw_centered(matrix, &self.time, time_area, TIME_STYLE);
-        draw_centered(matrix, &self.date, date_area, DATE_STYLE);
+        // Blinking colon: shows the clock is running
+        let colon_visible = now.timestamp_subsec_millis() < 500;
+        draw_time(matrix, &self.time, time_area, colon_visible);
+        let date_start = centered_start(&self.date, date_area, &DATE_STYLE);
+        let Ok(_) = Text::new(&self.date, date_start, DATE_STYLE).draw(matrix);
     }
 }
 
-/// Draws `text` centered in `area`: horizontally on its width, vertically on its digits.
+/// Draws `time` (`HH:MM`) centered in `area`, with or without its colon.
+///
+/// Without the colon, hours and minutes are drawn apart, at their places in `HH:MM`:
+/// in a proportional font, a space instead of the colon may have another width, and
+/// would shift the text.
+fn draw_time(matrix: &mut Matrix, time: &str, area: Rectangle, colon_visible: bool) {
+    let start = centered_start(time, area, &TIME_STYLE);
+    if colon_visible {
+        let Ok(_) = Text::new(time, start, TIME_STYLE).draw(matrix);
+    } else {
+        // The minutes start where `HH:` ends
+        let minutes_start = TIME_STYLE
+            .measure_string(&time[..3], start, Baseline::Alphabetic)
+            .next_position;
+        let Ok(_) = Text::new(&time[..2], start, TIME_STYLE).draw(matrix);
+        let Ok(_) = Text::new(&time[3..], minutes_start, TIME_STYLE).draw(matrix);
+    }
+}
+
+/// Start of the baseline of `text`, to center it in `area`: horizontally on its width,
+/// vertically on its digits.
 ///
 /// Not `Baseline::Middle`: with a u8g2 font, it centers the font's whole height, with
 /// the room for the letters going below the line (g, p), so the text sat too high.
-fn draw_centered(matrix: &mut Matrix, text: &str, area: Rectangle, style: U8g2TextStyle<Rgb888>) {
+fn centered_start(text: &str, area: Rectangle, style: &U8g2TextStyle<Rgb888>) -> Point {
+    // Up to where a next character would start: after the last one's spacing
+    let width = style
+        .measure_string(text, Point::zero(), Baseline::Alphabetic)
+        .next_position
+        .x;
     // The pixels of a digit, around a baseline at y = 0 (above it: negative y)
     let digit = style
         .measure_string("0", Point::zero(), Baseline::Alphabetic)
         .bounding_box;
-    let baseline = Point::new(area.center().x, area.center().y - digit.center().y);
-    let Ok(_) = Text::with_alignment(text, baseline, style, Alignment::Center).draw(matrix);
+    // -1: that spacing isn't drawn (the same as `Alignment::Center` does)
+    area.center() - Point::new((width - 1) / 2, digit.center().y)
 }
