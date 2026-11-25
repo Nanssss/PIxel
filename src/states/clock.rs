@@ -17,7 +17,7 @@ use embedded_graphics::{
 };
 use serde::Deserialize;
 use tinybmp::Bmp;
-use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_04b_03b_tr};
+use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_trixel_square_tr};
 
 use super::State;
 use crate::matrix::{Matrix, PANEL_SIZE};
@@ -40,12 +40,13 @@ const _: () = assert!(
 /// Time for one loop of `EARTH`
 const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(20);
 
-/// Font and color of the time. 04b_03b: 6 px high, proportional, ASCII only. Not all
-/// digits are equal: the time can move by 1 px when the minute changes
-const TIME_STYLE: U8g2TextStyle<Rgb888> = U8g2TextStyle::new(u8g2_font_04b_03b_tr, Rgb888::WHITE);
+/// Font and color of the time. Trixel square: 8 px high, proportional, ASCII only. Not
+/// all digits are equal: the time can move by 1 px when the minute changes
+const TIME_STYLE: U8g2TextStyle<Rgb888> =
+    U8g2TextStyle::new(u8g2_font_trixel_square_tr, Rgb888::WHITE);
 /// Font and color of the date
 const DATE_STYLE: U8g2TextStyle<Rgb888> =
-    U8g2TextStyle::new(u8g2_font_04b_03b_tr, Rgb888::CSS_DARK_MAGENTA);
+    U8g2TextStyle::new(u8g2_font_trixel_square_tr, Rgb888::CSS_DARK_MAGENTA);
 
 /// Config of the clock: the `[clock]` section of `config.toml`.
 #[derive(Debug, Deserialize)]
