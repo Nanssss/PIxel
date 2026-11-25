@@ -10,7 +10,6 @@ use chrono::Local;
 use embedded_graphics::{
     geometry::{AnchorX, AnchorY},
     image::GetPixel,
-    mono_font::{MonoTextStyle, ascii::FONT_5X8},
     pixelcolor::Rgb888,
     prelude::*,
     primitives::{PrimitiveStyle, Rectangle},
@@ -18,6 +17,7 @@ use embedded_graphics::{
 };
 use serde::Deserialize;
 use tinybmp::Bmp;
+use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_spleen5x8_mr};
 
 use super::State;
 use crate::matrix::{Matrix, PANEL_SIZE};
@@ -40,11 +40,12 @@ const _: () = assert!(
 /// Time for one loop of `EARTH`
 const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(20);
 
-/// Font and color of the time
-const TIME_STYLE: MonoTextStyle<'static, Rgb888> = MonoTextStyle::new(&FONT_5X8, Rgb888::WHITE);
+/// Font and color of the time. Spleen 5x8: monospace (the blinking colon and the
+/// digits never shift the text), ASCII only
+const TIME_STYLE: U8g2TextStyle<Rgb888> = U8g2TextStyle::new(u8g2_font_spleen5x8_mr, Rgb888::WHITE);
 /// Font and color of the date
-const DATE_STYLE: MonoTextStyle<'static, Rgb888> =
-    MonoTextStyle::new(&FONT_5X8, Rgb888::CSS_DARK_MAGENTA);
+const DATE_STYLE: U8g2TextStyle<Rgb888> =
+    U8g2TextStyle::new(u8g2_font_spleen5x8_mr, Rgb888::CSS_DARK_MAGENTA);
 /// Text centered horizontally and vertically on its anchor point
 const CENTERED: TextStyle = TextStyleBuilder::new()
     .alignment(Alignment::Center)

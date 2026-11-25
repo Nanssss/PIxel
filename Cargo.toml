@@ -28,6 +28,9 @@ toml = "1.1.4"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "registry"] }
+# Fonts made for small screens. The feature adds `U8g2TextStyle`, a text style for
+# embedded-graphics' `Text`
+u8g2-fonts = { version = "0.9.1", features = ["embedded_graphics_textstyle"] }
 yup-oauth2 = "12.1.0"
 
 [features]
