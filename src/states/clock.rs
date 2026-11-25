@@ -136,19 +136,28 @@ impl State for ClockState {
 
         // Blinking colon: shows the clock is running
         let colon_visible = now.timestamp_subsec_millis() < 500;
-        draw_time(matrix, &self.time, time_area, colon_visible);
-        let date_start = centered_start(&self.date, date_area, &DATE_STYLE);
+        // When not exactly centered, both texts lean toward the middle of the panel: the
+        // same margin at the top and bottom edges
+        draw_time(
+            matrix,
+            &self.time,
+            time_area,
+            AnchorY::Bottom,
+            colon_visible,
+        );
+        let date_start = centered_start(&self.date, date_area, AnchorY::Top, &DATE_STYLE);
         let Ok(_) = Text::new(&self.date, date_start, DATE_STYLE).draw(matrix);
     }
 }
 
-/// Draws `time` (`HH:MM`) centered in `area`, with or without its colon.
+/// Draws `time` (`HH:MM`) centered in `area` (see `centered_start` for `lean`), with or
+/// without its colon.
 ///
 /// Without the colon, hours and minutes are drawn apart, at their places in `HH:MM`:
 /// in a proportional font, a space instead of the colon may have another width, and
 /// would shift the text.
-fn draw_time(matrix: &mut Matrix, time: &str, area: Rectangle, colon_visible: bool) {
-    let start = centered_start(time, area, &TIME_STYLE);
+fn draw_time(matrix: &mut Matrix, time: &str, area: Rectangle, lean: AnchorY, colon_visible: bool) {
+    let start = centered_start(time, area, lean, &TIME_STYLE);
     if colon_visible {
         let Ok(_) = Text::new(time, start, TIME_STYLE).draw(matrix);
     } else {
@@ -162,20 +171,35 @@ fn draw_time(matrix: &mut Matrix, time: &str, area: Rectangle, colon_visible: bo
 }
 
 /// Start of the baseline of `text`, to center it in `area`: horizontally on its width,
-/// vertically on its digits.
+/// vertically on its digits. When the digits can't be exactly centered (odd number of
+/// free rows), they go 1 px closer to the `lean` side (`Top` or `Bottom`).
 ///
 /// Not `Baseline::Middle`: with a u8g2 font, it centers the font's whole height, with
 /// the room for the letters going below the line (g, p), so the text sat too high.
-fn centered_start(text: &str, area: Rectangle, style: &U8g2TextStyle<Rgb888>) -> Point {
+fn centered_start(
+    text: &str,
+    area: Rectangle,
+    lean: AnchorY,
+    style: &U8g2TextStyle<Rgb888>,
+) -> Point {
     // Up to where a next character would start: after the last one's spacing
     let width = style
         .measure_string(text, Point::zero(), Baseline::Alphabetic)
         .next_position
         .x;
+    // -1: that spacing isn't drawn (the same as `Alignment::Center` does)
+    let x = area.center().x - (width - 1) / 2;
+
     // The pixels of a digit, around a baseline at y = 0 (above it: negative y)
     let digit = style
         .measure_string("0", Point::zero(), Baseline::Alphabetic)
         .bounding_box;
-    // -1: that spacing isn't drawn (the same as `Alignment::Center` does)
-    area.center() - Point::new((width - 1) / 2, digit.center().y)
+    let free_rows = area.size.height as i32 - digit.size.height as i32;
+    let rows_above = match lean {
+        AnchorY::Bottom => (free_rows + 1) / 2,
+        _ => free_rows / 2,
+    };
+    let y = area.top_left.y + rows_above - digit.top_left.y;
+
+    Point::new(x, y)
 }
