@@ -935,8 +935,9 @@ const EARTH: Bmp<'static, Rgb888> =
 ```
 
 `Bmp` only borrows the bytes, and decodes the pixels while drawing: cheap for a 24-bit BMP
-(3 bytes copied per pixel). The images are made by the scripts of `tools/` (Python, not in
-git), into `assets/`.
+(3 bytes copied per pixel). The images are made by the Python scripts of `tools/`, into
+`assets/`: `python3 tools/earth.py` (needs Pillow). The scripts are in git, their data isn't
+(downloaded: see each script's docstring).
 
 An animation is a *strip*: its frames stacked in one image. The clock's `EARTH`: 480
 frames of 64x32 (the whole panel), one loop (40 s, `EARTH_LOOP_PERIOD`) = one Moon orbit =

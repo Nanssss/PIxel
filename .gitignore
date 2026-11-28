@@ -17,5 +17,7 @@ log/
 credentials.json
 tokencache.json
 
-# Ignore the asset generators (Python scripts and their data)
-tools/
+# Ignore the asset generators' data (downloaded: see each script's docstring), not the
+# scripts. `tools/*` and not `tools/`: git doesn't look for exceptions in an ignored folder.
+tools/*
+!tools/*.py
