@@ -3,8 +3,14 @@
 export
 
 BINARY_NAME = PIxel
+# Name of the systemd service on the Pi (see deploy/pixel.service)
+SERVICE = pixel
 
-.PHONY: all host target clean
+# Files of in/ sent to the Pi. Never the token cache: each machine keeps its own.
+# `wildcard` drops credentials.json from the list if it doesn't exist locally.
+IN_FILES = in/config.toml $(wildcard in/credentials.json)
+
+.PHONY: all host sim target deploy install run stop restart logs clean
 
 # Default action builds for the cross-target (ARMv6)
 all: target
@@ -13,6 +19,11 @@ all: target
 host:
 	cargo build --release
 
+# Run on your local host machine, with the matrix simulated in a window
+sim:
+	@mkdir -p target/debug && ln -sfn ../../in target/debug/in
+	cargo run --features simulator
+
 # Build for Raspberry Pi Zero
 target:
 	cross build --target arm-unknown-linux-gnueabihf --release
@@ -20,26 +31,41 @@ target:
 # Build and copy the compiled binary to the Raspberry Pi Zero
 deploy: target
 	@echo "==> Deploying binary to $(TARGET_HOST):$(TARGET_DIR)..."
-	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)"
-	scp -r in/ target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
+	# logs/ is created here, by the deploying user: if root created it on the first run,
+	# the app couldn't write new log files once its privileges are dropped
+	ssh $(TARGET_HOST) "mkdir -p $(TARGET_DIR)/logs $(TARGET_DIR)/in"
+	scp $(IN_FILES) $(TARGET_HOST):$(TARGET_DIR)/in/
+	scp target/arm-unknown-linux-gnueabihf/release/$(BINARY_NAME) $(TARGET_HOST):$(TARGET_DIR)/
 	@echo "==> Deployment complete!"
 
-# Run the binary on the remote Pi (runs in the background using nohup)
+# Install the systemd service on the Pi
+# The absolute deploy directory is queried from the Pi (TARGET_DIR may be relative to the home directory),
+# then filled into the unit file, which is written to /etc/systemd/system.
+install:
+	@echo "==> Installing the $(SERVICE) service on $(TARGET_HOST)..."
+	@dir=$$(ssh $(TARGET_HOST) "cd $(TARGET_DIR) && pwd") && \
+	sed -e "s|@TARGET_DIR@|$$dir|g" -e "s|@BINARY_NAME@|$(BINARY_NAME)|g" deploy/$(SERVICE).service | \
+	ssh $(TARGET_HOST) "sudo tee /etc/systemd/system/$(SERVICE).service > /dev/null && \
+		sudo systemctl daemon-reload && sudo systemctl enable $(SERVICE)"
+	@echo "==> Service installed and enabled at boot."
+
+# Start the service on the remote Pi
 run:
 	@echo "==> Starting $(BINARY_NAME) on $(TARGET_HOST)..."
-	@ssh $(TARGET_HOST) "cd $(TARGET_DIR) && sudo sh -c 'setsid nohup ./$(BINARY_NAME) &'"
+	@ssh $(TARGET_HOST) "sudo systemctl start $(SERVICE)"
 
-# Stop any running instance of the binary on the remote Pi
+# Stop the service on the remote Pi (SIGTERM: the app turns the panel off before exiting)
 stop:
 	@echo "==> Stopping $(BINARY_NAME) on $(TARGET_HOST)..."
-	@ssh $(TARGET_HOST) "sudo pkill -x $(BINARY_NAME) || true"
+	@ssh $(TARGET_HOST) "sudo systemctl stop $(SERVICE)"
 	@echo "==> Application stopped."
 
-# Convenient shortcut to restart (stop -> deploy -> run)
+# Convenient shortcut to restart (stop -> deploy -> run).
 restart: stop deploy run
 
+# Follow the latest log file on the remote Pi
 logs:
-	@ssh $(TARGET_HOST) "cd $(TARGET_DIR)/log && tail -n 100 -f \`ls -t * | head -n 1\`"
+	@ssh $(TARGET_HOST) "cd $(TARGET_DIR)/logs && tail -n 100 -f \`ls -t * | head -n 1\`"
 
 # Clean both Cargo and the external C library
 clean:

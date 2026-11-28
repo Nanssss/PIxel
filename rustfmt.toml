@@ -1,0 +1,7 @@
+# Formatting rules for `cargo fmt` (stable rustfmt). See https://rust-lang.github.io/rustfmt/
+
+# Same edition as Cargo.toml, so running `rustfmt` alone on a file formats it the same way
+edition = "2024"
+
+# Keep short code on one line up to the full line width (e.g. `let ... else { return };`)
+use_small_heuristics = "Default"

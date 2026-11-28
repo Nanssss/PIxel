@@ -6,64 +6,101 @@ fn main() {
     // Project dirs
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let deps_dir = PathBuf::from(&manifest_dir).join("deps");
+    // Where the generated files go: one per target, set by Cargo
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     // Matrix library
     let matrix_dir = deps_dir.join("rpi-rgb-led-matrix");
     let include_dir = matrix_dir.join("include");
     let lib_dir = matrix_dir.join("lib");
     let wrapper_path = deps_dir.join("wrapper.h");
 
-    // `cross` sets CROSS_TOOLCHAIN_PREFIX (e.g. "arm-unknown-linux-gnueabihf-").
-    // make only knows CC/CXX, so we bridge them manually: without this, make
-    // would use the host x86 gcc/g++ that also live in the container.
+    // `cross` sets CROSS_TOOLCHAIN_PREFIX (e.g. "arm-unknown-linux-gnueabihf-"), but make
+    // only knows CC/CXX: without them, it would use the host x86 gcc/g++ of the container
     let prefix = env::var("CROSS_TOOLCHAIN_PREFIX").unwrap_or_default();
     let cc = env::var("CC").unwrap_or_else(|_| format!("{prefix}gcc"));
     let cxx = env::var("CXX").unwrap_or_else(|_| format!("{prefix}g++"));
 
-    // Conditionally apply ARMv6 flags only when targeting Raspberry Pi Zero / armv6
+    // ARMv6 flags only when targeting the Raspberry Pi Zero
     let target = env::var("TARGET").unwrap_or_default();
     let is_armv6 = target.contains("arm-unknown-linux-gnueabihf") || target.contains("armv6");
 
-    // Compile the C++ library. LTO is disabled so the static lib contains native
-    // machine code rather than GCC LTO bytecode (which rust-lld cannot read).
+    // Build the C++ library out of tree, in OUT_DIR: one per target (host for
+    // rust-analyzer, ARM for cross), so the two builds never overwrite each other's
+    // objects. The submodule sources are only read.
+    let build_dir = out_dir.join("rgbmatrix");
+    // The compiler doesn't create directories: rp1/*.o objects need rp1/ to exist
+    std::fs::create_dir_all(build_dir.join("rp1")).expect("OUT_DIR should be writable");
+
+    // LTO is disabled: the static lib must contain machine code, not GCC LTO bytecode
+    // (which rust-lld can't read)
     let status = Command::new("make")
-        .arg("-C")
-        .arg(&matrix_dir)
-        .arg("lib/librgbmatrix.a")
+        // Share Cargo's job slots with make: the C++ files compile in parallel
+        .env("MAKEFLAGS", env::var("CARGO_MAKEFLAGS").unwrap_or_default())
+        .arg("-C") // run in the build dir: objects and librgbmatrix.a are written there
+        .arg(&build_dir)
+        .arg("-f") // ...but use the library's own Makefile
+        .arg(lib_dir.join("Makefile"))
+        .arg("-I") // where `include ../config.mk` is resolved from
+        .arg(&lib_dir)
+        // Sources and headers only: a plain VPATH would also pick up stale .o files
+        // left by an in-place build of the submodule
+        .arg(format!("--eval=vpath %.cc {}", lib_dir.display()))
+        .arg(format!("--eval=vpath %.c {}", lib_dir.display()))
+        .arg(format!("--eval=vpath %.h {}", lib_dir.display()))
+        // Paths the Makefile defines relative to lib/, made absolute
+        .arg(format!("INCDIR={}", include_dir.display()))
+        .arg(format!(
+            "RP1_PIO_VENDOR_DIR={}",
+            lib_dir.join("rp1/rp1_pio_vendor").display()
+        ))
+        .arg("librgbmatrix.a")
         .arg("LTO_FLAGS=")
         .arg(format!("CC={cc}"))
         .arg(format!("CXX={cxx}"))
         .args(is_armv6.then_some("CPU_ARCH_FLAGS=-march=armv6"))
         .status()
-        .expect("Failed to run make for rgbmatrix");
+        .expect("make should be installed");
     assert!(status.success(), "rgbmatrix make failed");
 
-    // Tell Cargo where to find the generated static library and link it
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-lib=static=rgbmatrix"); // Link to librgbmatrix.a (lib<name>.a)
-    println!("cargo:rustc-link-lib=stdc++"); // Link C++ standard library (mandatory for hzeller)
+    // Link the static library, and the C++ standard library it needs
+    println!("cargo:rustc-link-search=native={}", build_dir.display());
+    println!("cargo:rustc-link-lib=static=rgbmatrix"); // librgbmatrix.a
+    println!("cargo:rustc-link-lib=stdc++");
 
-    // Tell rust-lld not to garbage-collect custom sections bounded by __start_/__stop_
-    println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
+    // Host builds (rust-lld): keep the custom sections bounded by __start_/__stop_ (used
+    // by the RP1 code). The cross GNU ld keeps them by default, and is too old to know
+    // this option: it would only warn about it.
+    if !is_armv6 {
+        println!("cargo:rustc-link-arg=-Wl,-z,nostart-stop-gc");
+    }
 
-    // Set up rerun triggers so Cargo recompiles if source files or headers change
+    // Run this script again when the C library or its headers change
     println!("cargo:rerun-if-changed={}", wrapper_path.display());
-    println!("cargo:rerun-if-changed={}", include_dir.join("led-matrix-c.h").display());
-    println!("cargo:rerun-if-changed={}", lib_dir.join("Makefile").display());
-    println!("cargo:rerun-if-changed={}", matrix_dir.join("config.mk").display());
+    println!("cargo:rerun-if-changed={}", include_dir.display());
+    println!("cargo:rerun-if-changed={}", lib_dir.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        matrix_dir.join("config.mk").display()
+    );
 
-    // Generate bindings using bindgen
-    // bindgen reads TARGET and BINDGEN_EXTRA_CLANG_ARGS_<target> automatically
-    // via CargoCallbacks, so no manual cross-compilation configuration needed.
+    // Generate the bindings. bindgen reads TARGET and BINDGEN_EXTRA_CLANG_ARGS_<target>
+    // itself: nothing to configure for cross-compilation.
     let bindings = bindgen::Builder::default()
         .header(wrapper_path.to_str().unwrap())
+        // Only the items declared in the matrix C API, not the ones of the headers it
+        // includes: its types are all its own, or primitives that bindgen maps (u8, usize...)
+        .allowlist_file(".*led-matrix-c\\.h")
+        .allowlist_recursively(false)
+        // Not wrapped (see `wrapper.rs`). Its `FILE*` parameter needs glibc's `FILE`
+        // struct, no longer generated (see above): its bitfield code triggered clippy warnings
+        .blocklist_function("led_matrix_print_flags")
         .clang_arg(format!("-I{}", include_dir.display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
-        .expect("Unable to generate bindings");
+        .expect("bindgen should parse the C headers");
 
-    // Write the generated bindings to the OUT_DIR directory
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    // Written to OUT_DIR, and included by `src/matrix/ffi.rs`
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+        .write_to_file(out_dir.join("bindings.rs"))
+        .expect("OUT_DIR should be writable");
 }

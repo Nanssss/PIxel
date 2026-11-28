@@ -4,34 +4,20 @@
 # Ignore compiled binary files
 target/
 
-# Ignore the lock file
-Cargo.lock
-
-# Ignore local environment configuration files
-.cargo/config
-
-# Ignore Cargo cache files
-.cargo/registry/cache/
-.cargo/registry/index/
-.cargo/registry/src/
-
-# Ignore Git database files within Cargo
-.cargo/git/db/
-
-# Ignore generated documentation files
-docs/
-
-# Ignore test files
-tests/
-
 # Ignore log files
 *.log
+logs/
 log/
 
 # Ignore IDE settings
 .vscode/
 *.vim
 
-# Ignore credentials file
+# Ignore the Google OAuth2 secret and token cache
 credentials.json
 tokencache.json
+
+# Ignore the asset generators' data (downloaded: see each script's docstring), not the
+# scripts. `tools/*` and not `tools/`: git doesn't look for exceptions in an ignored folder.
+tools/*
+!tools/*.py

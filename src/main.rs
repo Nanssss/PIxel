@@ -1,101 +1,102 @@
-mod app; // Include ./app.rs
-use app::app_main;
+mod app;
+mod config;
+mod feed;
+mod google_auth;
+mod matrix;
+mod paths;
+mod states;
 
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, filter::{EnvFilter, LevelFilter}};
-use tracing_appender::{rolling, non_blocking::WorkerGuard};
-use std::sync::{OnceLock, LazyLock};
-use std::path::PathBuf;
-use tracing::info;
+use std::io::IsTerminal;
 
-/* Notes:
-    cargo add serde --features derive
-    cargo add serde_json
-    cargo add tokio --features full
-    cargo add reqwest --features json, blocking
-    cargo add yup-oauth2
-    cargo add hyper_util
-    cargo add tracing
-    cargo add tracing-subscriber --features env-filter json
-    cargo add tracing-appender
-    cargo add anyhow
-    cargo add toml
-    cargo add bindgen
-    cargo add cc
-*/
+use anyhow::{Context, Result};
+use tracing::{error, info};
+use tracing_appender::{non_blocking::WorkerGuard, rolling};
+use tracing_subscriber::{
+    filter::{EnvFilter, LevelFilter},
+    fmt,
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+};
 
-/* Constants */
-const APP_NAME:&str = "PIxel";
-const LOG_DIR:&str = "./logs";
-static FILE_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
-pub static EXECUTABLE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-    std::env::current_exe()
-        .expect("Failed to get current executable path")
-        .parent()
-        .expect("Executable has no parent directory")
-        .to_path_buf()
-});
+/// Name of the app, used as the prefix of the log files
+const APP_NAME: &str = env!("CARGO_BIN_NAME");
+/// Number of daily log files kept, so the SD card never fills up
+const LOG_FILES_KEPT: usize = 7;
 
-// ================================================================= 
-//    main function                                                |
-// ================================================================= 
+/// Sets up logging, then runs the app until it is asked to stop.
+// A 2nd worker keeps running the timers while the 1st one computes
+#[tokio::main(worker_threads = 2)]
+async fn main() -> Result<()> {
+    let _log_guard = init_logging()?;
+    log_panics();
 
-#[tokio::main]
-async fn main() {
-    /* Create tracing subscriber */
-    init_logging();
-
-    info!("Starting PIxel...");
-    app_main::app_main().await;
+    info!("Starting {APP_NAME}...");
+    // Also logged, so that the error ends up in the log file
+    app::run()
+        .await
+        .inspect_err(|e| error!("Fatal error: {e:#}"))
 }
 
-// ================================================================= 
-//    Static functions                                             |
-// ================================================================= 
-
-/* Function that initializes tracing subscriber for logging */
-fn init_logging() {
-    /* 1. Create a rotating file appender (daily or hourly) */
+/// Sets up logging, to the console and to a daily log file.
+///
+/// Returns the guard of the file writer: keep it until the end of the program,
+/// as dropping it flushes the last lines to the file.
+///
+/// # Errors
+/// If the log file can't be created, or a subscriber was already set.
+fn init_logging() -> Result<WorkerGuard> {
     let file_appender = rolling::RollingFileAppender::builder()
         .rotation(rolling::Rotation::DAILY)
         .filename_prefix(APP_NAME)
         .filename_suffix("log")
-        .build(LOG_DIR)
-        .expect("Failed to initialize rolling file appender");
+        .max_log_files(LOG_FILES_KEPT)
+        .build(paths::log_dir())
+        .context("failed to create the log file")?;
 
+    // Written by a dedicated thread: logging never waits for the SD card
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-    // NOTE: keep `guard` in a global/static to ensure logs flush on exit
-    FILE_GUARD.set(guard).expect("Failed to set FILE_GUARD");
 
-    /* 2. Console layer (stdout) */
     let console_layer = fmt::layer()
         .with_thread_names(true)
         .with_target(true)
-        .with_line_number(true)     // include line number
-        .with_ansi(true)            // colors for stdout
-        .compact();                 // shorter logs
+        .with_line_number(true)
+        // No colors in a file (`nohup.out`) or in the systemd journal
+        .with_ansi(std::io::stdout().is_terminal())
+        .compact();
 
-    /* 3. File layer */
     let file_layer = fmt::layer()
-        .with_writer(non_blocking)  // async, non-blocking writes
-        .with_ansi(false)           // no ANSI codes in file
-        .event_format(
-            fmt::format()
-            .with_thread_names(true)
-            .with_target(true)
-            .with_line_number(true) // include line number
-            .compact());            // either nothing (full), json, pretty, or compact
+        .with_writer(non_blocking)
+        .with_thread_names(true)
+        .with_line_number(true)
+        .with_target(true)
+        .with_ansi(false)
+        .compact();
 
-    /* 4. Filtering */
-    // default: info ; overridable by RUST_LOG=debug ./app
-    // to filter PIxel only: RUST_LOG=pixel=debug ./app
+    // `info` by default, overridden by `RUST_LOG` (e.g. `RUST_LOG=PIxel=debug`)
     let filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .from_env_lossy();
 
-    /* 5. Combine the layers into a single subscriber */
     tracing_subscriber::registry()
         .with(filter)
         .with(console_layer)
         .with(file_layer)
-        .init();
+        .try_init()
+        .context("failed to set the logging subscriber")?;
+
+    Ok(guard)
+}
+
+/// Logs every panic, so that it also ends up in the log file.
+///
+/// Rust only prints panics to stderr. A panicking background task is even quieter:
+/// tokio ends it, and the app keeps running without it.
+fn log_panics() {
+    // Kept: it prints the panic (and the backtrace, with `RUST_BACKTRACE=1`)
+    let default_hook = std::panic::take_hook();
+
+    std::panic::set_hook(Box::new(move |info| {
+        error!("{info}");
+        default_hook(info);
+    }));
 }
