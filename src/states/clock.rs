@@ -8,12 +8,11 @@ use std::time::{Duration, Instant};
 
 use chrono::Local;
 use embedded_graphics::{
-    geometry::AnchorY,
     image::GetPixel,
     pixelcolor::Rgb888,
     prelude::*,
     primitives::Rectangle,
-    text::{Baseline, Text, renderer::TextRenderer},
+    text::{Alignment, Baseline, Text, renderer::TextRenderer},
 };
 use serde::Deserialize;
 use tinybmp::Bmp;
@@ -52,8 +51,7 @@ const DATE_AREA: Rectangle = Rectangle::new(
     AREA_SIZE,
 );
 
-/// Font and color of the time. Tinyface: 5-px digits, proportional, ASCII only. All
-/// digits are as wide: the time never moves
+/// Font and color of the time
 const TIME_STYLE: U8g2TextStyle<Rgb888> = U8g2TextStyle::new(u8g2_font_tinyface_tr, Rgb888::WHITE);
 /// Font and color of the date
 const DATE_STYLE: U8g2TextStyle<Rgb888> =
@@ -108,17 +106,33 @@ impl State for ClockState {
         // Reading the system clock and formatting the texts are cheap (a few µs): no
         // need to keep the texts between frames
         let now = Local::now();
-        let time = now.format("%H:%M").to_string();
-        let date = now.format("%d %b").to_string().to_lowercase();
         // Blinking colon: shows the clock is running
-        let colon_visible = now.timestamp_subsec_millis() < 500;
+        let time_format = if now.timestamp_subsec_millis() < 500 {
+            "%H:%M"
+        } else {
+            "%H %M"
+        };
+        let time = now.format(time_format).to_string();
+        let date = now.format("%d %b").to_string().to_lowercase();
 
-        // When not exactly centered, both texts lean toward the middle of the panel: the
-        // same margin at the top and bottom edges
-        draw_time(matrix, &time, TIME_AREA, AnchorY::Bottom, colon_visible);
-        let date_start = centered_start(&date, DATE_AREA, AnchorY::Top, &DATE_STYLE);
-        let Ok(_) = Text::new(&date, date_start, DATE_STYLE).draw(matrix);
+        // 1 px down: the same margin above the time as below the date (6 rows)
+        let time_position = centered_position(TIME_AREA, &TIME_STYLE) + Point::new(0, 1);
+        let Ok(_) =
+            Text::with_alignment(&time, time_position, TIME_STYLE, Alignment::Center).draw(matrix);
+        let date_position = centered_position(DATE_AREA, &DATE_STYLE);
+        let Ok(_) =
+            Text::with_alignment(&date, date_position, DATE_STYLE, Alignment::Center).draw(matrix);
     }
+}
+
+/// Where to draw a text with `Alignment::Center` so that its digits are centered in
+/// `area`: the middle of its baseline
+fn centered_position(area: Rectangle, style: &U8g2TextStyle<Rgb888>) -> Point {
+    // The pixels of a digit, around a baseline at y = 0 (above it: negative y)
+    let digit = style
+        .measure_string("0", Point::zero(), Baseline::Alphabetic)
+        .bounding_box;
+    area.center() - Point::new(0, digit.center().y)
 }
 
 /// Fills the panel with the frame of `EARTH` due `elapsed` after the start.
@@ -136,51 +150,4 @@ fn draw_earth(matrix: &mut Matrix, elapsed: Duration) {
         .points()
         .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
     let Ok(()) = matrix.fill_contiguous(&matrix.bounding_box(), colors);
-}
-
-/// Draws `time` (`HH:MM`) centered in `area` (see `centered_start` for `lean`), with or
-/// without its colon.
-fn draw_time(matrix: &mut Matrix, time: &str, area: Rectangle, lean: AnchorY, colon_visible: bool) {
-    let start = centered_start(time, area, lean, &TIME_STYLE);
-    if colon_visible {
-        let Ok(_) = Text::new(time, start, TIME_STYLE).draw(matrix);
-    } else {
-        // The minutes start where `HH:` ends
-        let minutes_start = TIME_STYLE
-            .measure_string(&time[..3], start, Baseline::Alphabetic)
-            .next_position;
-        let Ok(_) = Text::new(&time[..2], start, TIME_STYLE).draw(matrix);
-        let Ok(_) = Text::new(&time[3..], minutes_start, TIME_STYLE).draw(matrix);
-    }
-}
-
-/// Start of the baseline of `text`, to center it in `area`: horizontally on its width,
-/// vertically on its digits. When the digits can't be exactly centered (odd number of
-/// free rows), they go 1 px closer to the `lean` side (`Top` or `Bottom`).
-fn centered_start(
-    text: &str,
-    area: Rectangle,
-    lean: AnchorY,
-    style: &U8g2TextStyle<Rgb888>,
-) -> Point {
-    // Up to where a next character would start: after the last one's spacing
-    let width = style
-        .measure_string(text, Point::zero(), Baseline::Alphabetic)
-        .next_position
-        .x;
-    // -1: that spacing isn't drawn (the same as `Alignment::Center` does)
-    let x = area.center().x - (width - 1) / 2;
-
-    // The pixels of a digit, around a baseline at y = 0 (above it: negative y)
-    let digit = style
-        .measure_string("0", Point::zero(), Baseline::Alphabetic)
-        .bounding_box;
-    let free_rows = area.size.height as i32 - digit.size.height as i32;
-    let rows_above = match lean {
-        AnchorY::Bottom => (free_rows + 1) / 2,
-        _ => free_rows / 2,
-    };
-    let y = area.top_left.y + rows_above - digit.top_left.y;
-
-    Point::new(x, y)
 }
