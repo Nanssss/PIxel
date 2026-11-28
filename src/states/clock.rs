@@ -23,7 +23,7 @@ use super::State;
 use crate::matrix::{Matrix, PANEL_SIZE};
 
 /// The animation behind the texts
-/// Frames the size of the panel, stacked vertically: the BMP image is W:64 x H:7680
+/// Frames the size of the panel, stacked vertically: the BMP image is W:64 x H:15360
 const EARTH: Bmp<'static, Rgb888> =
     match Bmp::from_slice(include_bytes!("../../assets/clock/earth.bmp")) {
         Ok(bmp) => bmp,
@@ -37,8 +37,8 @@ const _: () = assert!(
         && EARTH.as_raw().header().image_size.height % PANEL_SIZE.height == 0,
     "earth.bmp should be a strip of panel-sized frames"
 );
-/// Time for one loop of `EARTH`
-const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(20);
+/// Time for one loop of `EARTH` (one Moon orbit): 12 frames/s
+const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(40);
 
 /// Font and color of the time. Tinyface: 5-px digits, proportional, ASCII only. All
 /// digits are as wide: the time never moves
