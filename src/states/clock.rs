@@ -30,7 +30,8 @@ const NB_EARTH_FRAMES: u32 = EARTH.as_raw().header().image_size.height / PANEL_S
 // A wrong image size fails the build, instead of drawing garbage
 const _: () = assert!(
     EARTH.as_raw().header().image_size.width == PANEL_SIZE.width
-        && EARTH.as_raw().header().image_size.height % PANEL_SIZE.height == 0,
+        && EARTH.as_raw().header().image_size.height % PANEL_SIZE.height == 0
+        && NB_EARTH_FRAMES > 0,
     "earth.bmp should be a strip of panel-sized frames"
 );
 /// Speed of the `EARTH` animation. A loop (one Moon orbit) lasts
@@ -111,17 +112,14 @@ impl State for ClockState {
         let date = now.format("%d %b").to_string().to_lowercase();
 
         // Each text centered in its area, on its own pixels
-        let time = Text::new(&time, Point::zero(), TIME_STYLE)
+        let Ok(_) = Text::new(&time, Point::zero(), TIME_STYLE)
             .align_to(&TIME_AREA, horizontal::Center, vertical::Center)
             // 1 px down: the same margin above the time as below the date (6 rows)
-            .translate(Point::new(0, 1));
-        let Ok(_) = time.draw(matrix);
-        let date = Text::new(&date, Point::zero(), DATE_STYLE).align_to(
-            &DATE_AREA,
-            horizontal::Center,
-            vertical::Center,
-        );
-        let Ok(_) = date.draw(matrix);
+            .translate(Point::new(0, 1))
+            .draw(matrix);
+        let Ok(_) = Text::new(&date, Point::zero(), DATE_STYLE)
+            .align_to(&DATE_AREA, horizontal::Center, vertical::Center)
+            .draw(matrix);
     }
 }
 
@@ -140,4 +138,23 @@ fn draw_earth(matrix: &mut Matrix, elapsed: Duration) {
         .points()
         .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
     let Ok(()) = matrix.fill_contiguous(&matrix.bounding_box(), colors);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every time, with or without its colon, covers the same pixels as `00:00`: the time
+    /// never moves. Relies on the font (all digits as wide, a space as wide as the colon):
+    /// fails if a new font breaks it.
+    #[test]
+    fn time_never_moves() {
+        let bounds = |text: &str| Text::new(text, Point::zero(), TIME_STYLE).bounding_box();
+        let reference = bounds("00:00");
+        for (h, m) in (0..24).flat_map(|h| (0..60).map(move |m| (h, m))) {
+            for time in [format!("{h:02}:{m:02}"), format!("{h:02} {m:02}")] {
+                assert_eq!(bounds(&time), reference, "{time}");
+            }
+        }
+    }
 }

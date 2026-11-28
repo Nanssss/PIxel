@@ -524,7 +524,8 @@ where the next character would start (`next_position`) and the pixels the text c
 
 **A blinking colon that doesn't shift the text**: in a proportional font, a space is
 usually not as wide as the colon. In tinyface it is (2 px), so `HH MM` replaces `HH:MM`.
-⚠️ To check again with another font.
+The test `time_never_moves` (clock.rs) checks it for every minute: with another font, run
+`cargo test` (04b_03, squeezed_r6 or trixel_square would fail it).
 
 ### Placing things with `embedded-layout`
 
@@ -545,7 +546,8 @@ with the room for the letters below the line, so the texts sat too high). Two ef
 
 - The clock's date moves with the month: 1 px up when it has a letter below the line (j, y,
   p, g: jan, apr, may, jun, jul, aug, sep), 1 px right when its last letter is narrow
-  (mar, apr, dec). The time never moves: all its characters have the same size.
+  (mar, apr, dec). The time never moves: all its characters have the same size (see
+  `time_never_moves`).
 - 5-px digits in a 16-px area can't be exactly centered (5.5 rows on each side): they go
   1 px up, as `Rectangle::center()` rounds down. The time is then moved 1 px down
   (`.translate(Point::new(0, 1))`): the same margin (6 rows) above it and below the date.
