@@ -8,12 +8,9 @@ use std::time::{Duration, Instant};
 
 use chrono::Local;
 use embedded_graphics::{
-    image::GetPixel,
-    pixelcolor::Rgb888,
-    prelude::*,
-    primitives::Rectangle,
-    text::{Alignment, Baseline, Text, renderer::TextRenderer},
+    image::GetPixel, pixelcolor::Rgb888, prelude::*, primitives::Rectangle, text::Text,
 };
+use embedded_layout::prelude::*;
 use serde::Deserialize;
 use tinybmp::Bmp;
 use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_tinyface_tr};
@@ -76,8 +73,7 @@ pub struct ClockState {
     started: Instant,
 }
 
-/// Written by hand: `Instant` has no `Default`. Also used by `app.rs`, as the fallback
-/// state.
+/// Written by hand: `Instant` has no `Default`
 impl Default for ClockState {
     fn default() -> Self {
         Self {
@@ -103,8 +99,7 @@ impl State for ClockState {
     fn draw(&mut self, matrix: &mut Matrix) {
         draw_earth(matrix, self.started.elapsed());
 
-        // Reading the system clock and formatting the texts are cheap (a few µs): no
-        // need to keep the texts between frames
+        // Cheap (a few µs): no need to keep the texts between frames
         let now = Local::now();
         // Blinking colon: shows the clock is running
         let time_format = if now.timestamp_subsec_millis() < 500 {
@@ -115,24 +110,19 @@ impl State for ClockState {
         let time = now.format(time_format).to_string();
         let date = now.format("%d %b").to_string().to_lowercase();
 
-        // 1 px down: the same margin above the time as below the date (6 rows)
-        let time_position = centered_position(TIME_AREA, &TIME_STYLE) + Point::new(0, 1);
-        let Ok(_) =
-            Text::with_alignment(&time, time_position, TIME_STYLE, Alignment::Center).draw(matrix);
-        let date_position = centered_position(DATE_AREA, &DATE_STYLE);
-        let Ok(_) =
-            Text::with_alignment(&date, date_position, DATE_STYLE, Alignment::Center).draw(matrix);
+        // Each text centered in its area, on its own pixels
+        let time = Text::new(&time, Point::zero(), TIME_STYLE)
+            .align_to(&TIME_AREA, horizontal::Center, vertical::Center)
+            // 1 px down: the same margin above the time as below the date (6 rows)
+            .translate(Point::new(0, 1));
+        let Ok(_) = time.draw(matrix);
+        let date = Text::new(&date, Point::zero(), DATE_STYLE).align_to(
+            &DATE_AREA,
+            horizontal::Center,
+            vertical::Center,
+        );
+        let Ok(_) = date.draw(matrix);
     }
-}
-
-/// Where to draw a text with `Alignment::Center` so that its digits are centered in
-/// `area`: the middle of its baseline
-fn centered_position(area: Rectangle, style: &U8g2TextStyle<Rgb888>) -> Point {
-    // The pixels of a digit, around a baseline at y = 0 (above it: negative y)
-    let digit = style
-        .measure_string("0", Point::zero(), Baseline::Alphabetic)
-        .bounding_box;
-    area.center() - Point::new(0, digit.center().y)
 }
 
 /// Fills the panel with the frame of `EARTH` due `elapsed` after the start.

@@ -509,7 +509,7 @@ belongs to this crate.
 
 ### Text with u8g2 fonts
 
-*In the code:* `TIME_STYLE`, `DATE_STYLE`, `centered_position` (clock.rs)
+*In the code:* `TIME_STYLE`, `DATE_STYLE` (clock.rs)
 
 `embedded-graphics`' own fonts (`mono_font`) are all monospace. The `u8g2-fonts` crate
 brings the ~2000 fonts of the u8g2 C library, made for small screens, through
@@ -519,21 +519,36 @@ ASCII only (the others are skipped), `_tn` digits only, `_m*` monospace.
 
 A text style implements `TextRenderer`: `measure_string(text, position, baseline)` returns
 where the next character would start (`next_position`) and the pixels the text covers
-(`bounding_box`), without drawing. The texts are drawn with `Alignment::Center`, at a point
-measured that way:
+(`bounding_box`), without drawing. With u8g2, a `Text`'s `bounding_box()` is its pixels too
+(what `embedded-layout` aligns, see below).
 
-- **Centered on the digits**: the point is the middle of the baseline
-  (`Baseline::Alphabetic`, the default: with u8g2, the bottom row of the digits), placed so
-  that the pixels of a `0` are centered in the area. Not `Baseline::Middle`: it centers the
-  font's whole height, with the room for the letters below the line (g, p), so the texts
-  sat too high. Not the text's own pixels either: months with such letters (jan, sep...)
-  would move the date up.
-- **Rounding**: 5-px digits in a 16-px area can't be exactly centered (5.5 rows on each
-  side): they go 1 px up, as `Rectangle::center()` rounds down. The time is then moved
-  1 px down (`+ Point::new(0, 1)`): the same margin (6 rows) above it and below the date.
-- **A blinking colon that doesn't shift the text**: in a proportional font, a space is
-  usually not as wide as the colon. In tinyface it is (2 px), so `HH MM` replaces `HH:MM`.
-  ⚠️ To check again with another font.
+**A blinking colon that doesn't shift the text**: in a proportional font, a space is
+usually not as wide as the colon. In tinyface it is (2 px), so `HH MM` replaces `HH:MM`.
+⚠️ To check again with another font.
+
+### Placing things with `embedded-layout`
+
+*In the code:* `ClockState::draw` (clock.rs)
+
+`embedded-layout` places anything with a bounding box (`Dimensions`) that can be moved
+(`Transform`): texts, shapes, images. Its `View` trait is implemented for all of them.
+
+- `view.align_to(&other, horizontal::Center, vertical::Center)` moves `view` relative to
+  `other` (a `Rectangle` area, the panel, another view). Also `Left`, `Right`, `Top`,
+  `Bottom`, and `LeftToRight`... to put it next to `other`, outside of it.
+- `LinearLayout::vertical(Chain::new(a).append(b))` stacks views in a column (or a row,
+  `horizontal`), with a spacing (`FixedMargin`, `DistributeFill`). The column is then a
+  view itself, that can be aligned.
+
+Text is aligned on its own pixels, not on the font's line (like `Baseline::Middle` does,
+with the room for the letters below the line, so the texts sat too high). Two effects:
+
+- The clock's date moves with the month: 1 px up when it has a letter below the line (j, y,
+  p, g: jan, apr, may, jun, jul, aug, sep), 1 px right when its last letter is narrow
+  (mar, apr, dec). The time never moves: all its characters have the same size.
+- 5-px digits in a 16-px area can't be exactly centered (5.5 rows on each side): they go
+  1 px up, as `Rectangle::center()` rounds down. The time is then moved 1 px down
+  (`.translate(Point::new(0, 1))`): the same margin (6 rows) above it and below the date.
 
 ### `Default`: derive it or write it
 
