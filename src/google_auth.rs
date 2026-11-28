@@ -1,0 +1,72 @@
+//! Google OAuth2 authentication, for the states reading from a Google API.
+//!
+//! Built on the `yup-oauth2` crate, which does all the work: asking the user for
+//! the authorization on the first run, caching the tokens on disk, and refreshing
+//! them once they have expired.
+
+use anyhow::{Context, Result};
+use yup_oauth2::authenticator::Authenticator;
+use yup_oauth2::{
+    DefaultHyperClientBuilder, HyperClientBuilder, InstalledFlowAuthenticator,
+    InstalledFlowReturnMethod,
+};
+
+use crate::paths;
+
+/// Gives out the access tokens needed to call the Google APIs.
+///
+/// Hides `yup-oauth2`: the rest of the app only sees `new` and `token`.
+pub struct GoogleAuth {
+    authenticator: Authenticator<Connector>,
+}
+
+/// Connector of the HTTP client yup-oauth2 builds by default (HTTPS with rustls).
+type Connector = <DefaultHyperClientBuilder as HyperClientBuilder>::Connector;
+
+impl GoogleAuth {
+    /// Prepares the authentication. Only local files are read here: nothing is
+    /// requested from Google before the first call to [`GoogleAuth::token`].
+    ///
+    /// # Errors
+    /// If the application secret can't be read, or the authenticator can't be built.
+    pub async fn new() -> Result<Self> {
+        let secret_path = paths::credentials_file();
+        let secret = yup_oauth2::read_application_secret(&secret_path)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to read application secret {}",
+                    secret_path.display()
+                )
+            })?;
+
+        // Installed flow: on the first run, the user grants the access in a browser,
+        // and Google redirects it to a local HTTP server started by the authenticator
+        let authenticator =
+            InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::HTTPRedirect)
+                .persist_tokens_to_disk(paths::token_file())
+                .build()
+                .await
+                .context("failed to create InstalledFlowAuthenticator")?;
+
+        Ok(Self { authenticator })
+    }
+
+    /// Returns an access token valid for `scopes`, to be sent as a `Bearer` token.
+    ///
+    /// Taken from the cache while it is still valid: only goes through the network
+    /// when a new one is needed.
+    ///
+    /// # Errors
+    /// If no token could be obtained (no network, authorization refused...).
+    // The token is a secret: never log it
+    pub async fn token(&self, scopes: &[&str]) -> Result<String> {
+        let token = self
+            .authenticator
+            .token(scopes)
+            .await
+            .context("failed to obtain OAuth2 token")?;
+
+        Ok(token.token().context("OAuth2 token is empty")?.to_string())
+    }
+}

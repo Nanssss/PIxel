@@ -3,6 +3,9 @@ enabled = true
 
 [weather]
 enabled = true
+# Place the forecast is fetched for, in decimal degrees
+latitude = 43.57
+longitude = 1.46
 
-[gtasks]
+[calendar]
 enabled = true
