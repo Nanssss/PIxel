@@ -643,9 +643,9 @@ The task owns the `Sender`, the `Feed` owns the `Receiver`:
 has no battery-backed clock, and syncs with NTP after boot). Use it for durations and ages.
 Use the time of day (`chrono::Local::now()`) only to show it.
 
-The clock's animation is timed by an `Instant` too: the position in the current loop is
-`started.elapsed().div_duration_f64(EARTH_LOOP_PERIOD).fract()`, a number in `0.0..1.0`
-(`fract` drops the whole loops already made).
+The clock's animation is timed by an `Instant` too: the frame to show is the number of
+frames since the start (`elapsed().as_secs_f64() * EARTH_FPS`), modulo the number of frames
+(`%` drops the whole loops already made).
 
 ### Timeout and exponential backoff
 
@@ -940,13 +940,13 @@ const EARTH: Bmp<'static, Rgb888> =
 (downloaded: see each script's docstring).
 
 An animation is a *strip*: its frames stacked in one image. The clock's `EARTH`: 480
-frames of 64x32 (the whole panel), one loop (40 s, `EARTH_LOOP_PERIOD`) = one Moon orbit =
+frames of 64x32 (the whole panel), one loop (40 s at 12 frames/s, `EARTH_FPS`) = one Moon orbit =
 two Earth turns, made by `tools/earth.py`: the Earth with satellite land colors (NASA Blue
 Marble) and changing clouds, the Moon, the Sun pulsing with sunspots, stars and the Milky
 Way. The number of frames is the image's height divided by the panel's, at compile time:
 `as_raw().header()` is a `const fn`, and the panel's size is the `PANEL_SIZE` const of
-matrix.rs. The script stays the only place to change it (with `EARTH_LOOP_PERIOD`, to keep
-12 frames/s).
+matrix.rs. The script stays the only place to change it: the loop's length follows
+(`NB_EARTH_FRAMES / EARTH_FPS`).
 
 A loop must not jump from its last frame to its first: everything that moves makes a whole
 number of cycles per loop (Earth turns, Sun turns, the pulse's sine waves, the clouds'

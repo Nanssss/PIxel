@@ -8,11 +8,11 @@ use std::time::{Duration, Instant};
 
 use chrono::Local;
 use embedded_graphics::{
-    geometry::{AnchorX, AnchorY},
+    geometry::AnchorY,
     image::GetPixel,
     pixelcolor::Rgb888,
     prelude::*,
-    primitives::{PrimitiveStyle, Rectangle},
+    primitives::Rectangle,
     text::{Baseline, Text, renderer::TextRenderer},
 };
 use serde::Deserialize;
@@ -22,8 +22,8 @@ use u8g2_fonts::{U8g2TextStyle, fonts::u8g2_font_tinyface_tr};
 use super::State;
 use crate::matrix::{Matrix, PANEL_SIZE};
 
-/// The animation behind the texts
-/// Frames the size of the panel, stacked vertically: the BMP image is W:64 x H:15360
+/// The animation behind the texts, made by `tools/earth.py`: frames the size of the
+/// panel, stacked vertically in one image
 const EARTH: Bmp<'static, Rgb888> =
     match Bmp::from_slice(include_bytes!("../../assets/clock/earth.bmp")) {
         Ok(bmp) => bmp,
@@ -37,8 +37,20 @@ const _: () = assert!(
         && EARTH.as_raw().header().image_size.height % PANEL_SIZE.height == 0,
     "earth.bmp should be a strip of panel-sized frames"
 );
-/// Time for one loop of `EARTH` (one Moon orbit): 12 frames/s
-const EARTH_LOOP_PERIOD: Duration = Duration::from_secs(40);
+/// Speed of the `EARTH` animation. A loop (one Moon orbit) lasts
+/// `NB_EARTH_FRAMES / EARTH_FPS` seconds
+const EARTH_FPS: f64 = 12.0;
+
+/// Size of a text area: a quarter of the panel
+const AREA_SIZE: Size = Size::new(PANEL_SIZE.width / 2, PANEL_SIZE.height / 2);
+/// Where the time goes: the upper right quarter (the Earth is on the left half).
+/// `tools/earth.py` keeps the stars out of the texts (`TEXT_BOXES`): update it too
+const TIME_AREA: Rectangle = Rectangle::new(Point::new(AREA_SIZE.width as i32, 0), AREA_SIZE);
+/// Where the date goes: the lower right quarter
+const DATE_AREA: Rectangle = Rectangle::new(
+    Point::new(AREA_SIZE.width as i32, AREA_SIZE.height as i32),
+    AREA_SIZE,
+);
 
 /// Font and color of the time. Tinyface: 5-px digits, proportional, ASCII only. All
 /// digits are as wide: the time never moves
@@ -62,24 +74,15 @@ impl Default for ClockConfig {
 }
 
 pub struct ClockState {
-    /// `HH:MM` (the colon blinks when drawn, see `draw_time`)
-    time: String,
-    /// `DD mon`
-    date: String,
-    /// Minute (since the Unix epoch)
-    shown_minute: i64,
     /// Start of the animation
     started: Instant,
 }
 
-/// Written by hand: `Instant` has no `Default`.
+/// Written by hand: `Instant` has no `Default`. Also used by `app.rs`, as the fallback
+/// state.
 impl Default for ClockState {
     fn default() -> Self {
         Self {
-            // Empty texts, formatted on the first frame (`shown_minute` 0 is never "now")
-            time: String::new(),
-            date: String::new(),
-            shown_minute: 0,
             started: Instant::now(),
         }
     }
@@ -98,64 +101,45 @@ impl State for ClockState {
         true
     }
 
-    /// Draws animation + text
+    /// Draws the animation, then the texts over it
     fn draw(&mut self, matrix: &mut Matrix) {
-        // Reading the system clock is local and cheap: fine on every frame
+        draw_earth(matrix, self.started.elapsed());
+
+        // Reading the system clock and formatting the texts are cheap (a few µs): no
+        // need to keep the texts between frames
         let now = Local::now();
-
-        // Unix minute rather than `minute()`: right even if the clock jumps
-        let minute = now.timestamp() / 60;
-        if minute != self.shown_minute {
-            self.time = now.format("%H:%M").to_string();
-            self.date = now.format("%d %b").to_string().to_lowercase();
-            self.shown_minute = minute;
-        }
-
-        let screen = matrix.bounding_box();
-        let right = screen.resized_width(screen.size.width / 2, AnchorX::Right);
-        let half_height = right.size.height / 2;
-        let time_area = right.resized_height(half_height, AnchorY::Top);
-        let date_area = right.resized_height(half_height, AnchorY::Bottom);
-
-        // Elapsed time (monotonic) rather than the time of day: no jump on an NTP sync
-        let progress = self
-            .started
-            .elapsed()
-            .div_duration_f64(EARTH_LOOP_PERIOD)
-            .fract();
-        let frame = (progress * f64::from(NB_EARTH_FRAMES)) as u32;
-        let source = Rectangle::new(
-            Point::new(0, (frame * PANEL_SIZE.height) as i32),
-            PANEL_SIZE,
-        );
-        // Reads only this frame: `sub_image` would decode the whole strip
-        let colors = source
-            .points()
-            .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
-        let Ok(()) = matrix.fill_contiguous(&screen, colors);
-
+        let time = now.format("%H:%M").to_string();
+        let date = now.format("%d %b").to_string().to_lowercase();
         // Blinking colon: shows the clock is running
         let colon_visible = now.timestamp_subsec_millis() < 500;
+
         // When not exactly centered, both texts lean toward the middle of the panel: the
         // same margin at the top and bottom edges
-        draw_time(
-            matrix,
-            &self.time,
-            time_area,
-            AnchorY::Bottom,
-            colon_visible,
-        );
-        let date_start = centered_start(&self.date, date_area, AnchorY::Top, &DATE_STYLE);
-        let Ok(_) = Text::new(&self.date, date_start, DATE_STYLE).draw(matrix);
+        draw_time(matrix, &time, TIME_AREA, AnchorY::Bottom, colon_visible);
+        let date_start = centered_start(&date, DATE_AREA, AnchorY::Top, &DATE_STYLE);
+        let Ok(_) = Text::new(&date, date_start, DATE_STYLE).draw(matrix);
     }
+}
+
+/// Fills the panel with the frame of `EARTH` due `elapsed` after the start.
+///
+/// Elapsed time (monotonic) rather than the time of day: no jump on an NTP sync.
+fn draw_earth(matrix: &mut Matrix, elapsed: Duration) {
+    // Frames shown since the start, wrapped to the loop (u64: no overflow, even after years)
+    let frame = (elapsed.as_secs_f64() * EARTH_FPS) as u64 % u64::from(NB_EARTH_FRAMES);
+    let source = Rectangle::new(
+        Point::new(0, frame as i32 * PANEL_SIZE.height as i32),
+        PANEL_SIZE,
+    );
+    // Reads only this frame: `sub_image` would decode the whole strip
+    let colors = source
+        .points()
+        .map(|point| EARTH.pixel(point).unwrap_or(Rgb888::BLACK));
+    let Ok(()) = matrix.fill_contiguous(&matrix.bounding_box(), colors);
 }
 
 /// Draws `time` (`HH:MM`) centered in `area` (see `centered_start` for `lean`), with or
 /// without its colon.
-///
-/// Without the colon, hours and minutes are drawn apart, at their places in `HH:MM`:
-/// in a proportional font, a space instead of the colon may have another width, and
-/// would shift the text.
 fn draw_time(matrix: &mut Matrix, time: &str, area: Rectangle, lean: AnchorY, colon_visible: bool) {
     let start = centered_start(time, area, lean, &TIME_STYLE);
     if colon_visible {
@@ -173,9 +157,6 @@ fn draw_time(matrix: &mut Matrix, time: &str, area: Rectangle, lean: AnchorY, co
 /// Start of the baseline of `text`, to center it in `area`: horizontally on its width,
 /// vertically on its digits. When the digits can't be exactly centered (odd number of
 /// free rows), they go 1 px closer to the `lean` side (`Top` or `Bottom`).
-///
-/// Not `Baseline::Middle`: with a u8g2 font, it centers the font's whole height, with
-/// the room for the letters going below the line (g, p), so the text sat too high.
 fn centered_start(
     text: &str,
     area: Rectangle,

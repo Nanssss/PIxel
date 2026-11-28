@@ -32,7 +32,7 @@ OUT_BMP = TOOLS_DIR.parent / "assets" / "clock" / "earth.bmp"
 # Frames
 WIDTH, HEIGHT = 64, 32  # the panel
 SS = 4  # supersampling per axis (anti-aliasing)
-FRAMES = 480  # one loop: 12 frames/s over 40 s in the app (EARTH_LOOP_PERIOD in clock.rs)
+FRAMES = 480  # one loop: 40 s in the app, at 12 frames/s (EARTH_FPS in clock.rs)
 EARTH_TURNS = 2  # per Moon orbit: one turn every 20 s
 
 # Earth, seen from 20°N 15°E (Europe and Africa), axis tilted like the real one
